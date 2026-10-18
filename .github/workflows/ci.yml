@@ -28,4 +28,4 @@ jobs:
 
       - name: Security scan (no hardcoded secrets)
         run: |
-          grep -rnE "(zhhRemote|fo;ss|app-panel-secret-key-2026|192\.168\.1\.5:9000)" backend/app/ deploy/ && echo "FOUND SECRET" && exit 1 || echo "no secrets OK"
+          grep -rnE "(minio_secret|minio_root_user|app-panel-secret-key-2026|192\.168\.1\.5:9000)" backend/app/ deploy/ && echo "FOUND SECRET" && exit 1 || echo "no secrets OK"
