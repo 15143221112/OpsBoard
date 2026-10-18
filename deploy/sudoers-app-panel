@@ -1,0 +1,7 @@
+# app-panel sudoers 白名单：仅允许 ubuntu 用户执行面板需要的系统命令
+# 不放开 root shell，最小权限
+# 注：docker 命令不需要 sudo（ubuntu 在 docker 组），故不在此放开
+ubuntu ALL=(root) NOPASSWD: /bin/systemctl start *, /bin/systemctl stop *, /bin/systemctl restart *, /bin/systemctl show *, /bin/systemctl is-active *
+ubuntu ALL=(root) NOPASSWD: /bin/systemctl enable *, /bin/systemctl disable *, /bin/systemctl is-enabled *
+ubuntu ALL=(root) NOPASSWD: /usr/bin/journalctl *
+ubuntu ALL=(root) NOPASSWD: /usr/bin/cat /sys/fs/cgroup/system.slice/*.service/cgroup.procs

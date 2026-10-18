@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+backend/venv/
+
+# 数据与凭据（绝不提交）
+*.db
+*.sqlite
+data/
+.env
+.env.local
+*.log
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 测试产物
+.pytest_cache/
+htmlcov/
+.coverage
+
+# IDE
+.idea/
+.vscode/

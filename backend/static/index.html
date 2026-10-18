@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XH Panel · 服务器应用管理</title>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+:root{
+  --bg:#f0f2f5; --card:#fff; --primary:#2563eb; --ok:#10b981; --stop:#ef4444;
+  --warn:#f59e0b; --muted:#6b7280; --radius:14px; --shadow:0 2px 12px rgba(17,24,39,.06);
+}
+body{ font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif; background:var(--bg); color:#1f2937; }
+/* 登录 */
+.login-wrap{ height:100vh; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden;
+  background:linear-gradient(135deg,#050a1a 0%,#0b1e4a 45%,#1e1b4b 100%); }
+.login-canvas{ position:absolute; inset:0; z-index:0; }
+.login-glow{ position:absolute; border-radius:50%; filter:blur(90px); opacity:.4; animation:float 9s ease-in-out infinite; }
+.login-glow.g1{ width:520px;height:520px;background:#3b82f6; top:-140px; left:-100px; }
+.login-glow.g2{ width:460px;height:460px;background:#7c3aed; bottom:-160px; right:-80px; animation-delay:2s; }
+.login-glow.g3{ width:300px;height:300px;background:#06b6d4; top:40%; left:55%; animation-delay:4s; opacity:.25; }
+@keyframes float{ 0%,100%{ transform:translate(0,0) scale(1);} 50%{ transform:translate(30px,-20px) scale(1.08);} }
+.login-card{ width:360px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); border-radius:22px; padding:44px 38px; position:relative; z-index:2; backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); box-shadow:0 30px 80px rgba(0,0,0,.5); animation:cardIn .7s cubic-bezier(.22,.68,.35,1) both; }
+@keyframes cardIn{ from{ opacity:0; transform:translateY(26px) scale(.96);} to{ opacity:1; transform:translateY(0) scale(1);} }
+.login-card h1{ font-size:28px; font-weight:800; margin-bottom:8px; color:#fff; letter-spacing:.5px; }
+.login-card h1 em{ font-style:normal; background:linear-gradient(90deg,#60a5fa,#a78bfa,#34d399); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.login-card .sub{ color:#94a3b8; font-size:13px; margin-bottom:30px; letter-spacing:.3px; }
+.lfield{ margin-bottom:18px; position:relative; }
+.lfield input{ width:100%; height:46px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.16); border-radius:12px; padding:0 14px; font-size:15px; color:#fff; outline:none; transition:.25s; }
+.lfield input::placeholder{ color:#64748b; }
+.lfield input:focus{ border-color:#60a5fa; background:rgba(255,255,255,.12); box-shadow:0 0 0 4px rgba(96,165,250,.18), 0 0 24px rgba(96,165,250,.25); }
+.lbtn{ width:100%; height:46px; border:none; border-radius:12px; color:#fff; font-size:15px; font-weight:700; cursor:pointer; position:relative; overflow:hidden; letter-spacing:2px;
+  background:linear-gradient(90deg,#2563eb,#7c3aed); box-shadow:0 8px 24px rgba(124,58,237,.35); transition:.25s; }
+.lbtn::after{ content:''; position:absolute; top:0; left:-120%; width:60%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent); transform:skewX(-20deg); transition:.5s; }
+.lbtn:hover{ transform:translateY(-2px); box-shadow:0 12px 32px rgba(124,58,237,.5); background:linear-gradient(90deg,#2563eb,#8b5cf6); }
+.lbtn:hover::after{ left:160%; }
+.lbtn:disabled{ opacity:.7; cursor:not-allowed; transform:none; }
+.lerr{ color:#fca5a5; font-size:13px; margin-top:12px; text-align:center; min-height:18px; }
+/* 布局 */
+.layout{ min-height:100vh; display:flex; flex-direction:column; }
+.topnav{ position:sticky; top:0; z-index:50; display:flex; align-items:center; justify-content:space-between; padding:0 24px; height:60px;
+  background:rgba(255,255,255,.82); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid #eef2f7; box-shadow:0 1px 8px rgba(17,24,39,.05); }
+.topnav-left{ display:flex; align-items:center; gap:22px; }
+.brand{ display:flex; align-items:center; gap:10px; font-size:17px; font-weight:700; color:#111827; }
+.brand .logo{ width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:18px; color:#fff; box-shadow:0 4px 12px rgba(124,58,237,.3); }
+.nav{ display:flex; align-items:center; gap:6px; }
+.nav a{ display:flex; align-items:center; gap:8px; padding:9px 16px; border-radius:10px; color:#64748b; text-decoration:none; font-size:14px; cursor:pointer; transition:.2s; font-weight:500; }
+.nav a:hover{ background:#f1f5f9; color:#0f172a; }
+.nav a.active{ background:linear-gradient(135deg,#eff6ff,#eef2ff); color:#2563eb; font-weight:600; box-shadow:inset 0 0 0 1px #dbeafe; }
+.topnav-right{ position:relative; }
+.userchip{ display:flex; align-items:center; gap:9px; padding:7px 14px; border-radius:12px; cursor:pointer; transition:.2s; background:#f8fafc; border:1px solid #eef2f7; }
+.userchip:hover{ background:#f1f5f9; }
+.avatar{ width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:15px; }
+.uname{ font-size:14px; font-weight:600; color:#0f172a; }
+.caret{ color:#94a3b8; font-size:12px; }
+.user-menu{ position:absolute; top:48px; right:0; min-width:170px; background:#fff; border:1px solid #eef2f7; border-radius:14px; box-shadow:0 12px 40px rgba(17,24,39,.15); overflow:hidden; z-index:60; animation:menuIn .18s ease-out both; }
+@keyframes menuIn{ from{ opacity:0; transform:translateY(-6px);} to{ opacity:1; transform:translateY(0);} }
+.um-item{ padding:12px 16px; font-size:14px; cursor:pointer; transition:.15s; }
+.um-item:hover{ background:#f8fafc; }
+.um-out{ color:#ef4444; border-top:1px solid #f1f5f9; }
+.main{ flex:1; padding:24px 28px; overflow:auto; }
+.topbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; flex-wrap:wrap; gap:10px; }
+.topbar h2{ font-size:22px; font-weight:700; }
+.ovgrid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-bottom:22px; }
+.stat{ background:var(--card); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow); }
+.stat .label{ font-size:13px; color:var(--muted); }
+.stat .value{ font-size:24px; font-weight:700; margin-top:6px; }
+.mem-bar{ height:6px; background:#f3f4f6; border-radius:6px; overflow:hidden; margin-top:6px; }
+.mem-bar span{ display:block; height:100%; border-radius:6px; }
+/* 工具栏 */
+.toolbar{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+.vtoggle{ display:flex; gap:4px; background:#eef1f6; padding:4px; border-radius:10px; }
+.vtoggle button{ padding:6px 14px; border:none; border-radius:8px; background:transparent; cursor:pointer; font-size:13px; }
+.vtoggle button.active{ background:#fff; color:var(--primary); box-shadow:0 1px 4px rgba(0,0,0,.08); }
+.filters{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.filters input,.filters select{ height:32px; border:1px solid #d1d5db; border-radius:8px; padding:0 10px; font-size:13px; outline:none; }
+.btn{ height:32px; padding:0 12px; border:none; border-radius:8px; font-size:13px; cursor:pointer; font-weight:500; }
+.btn-primary{ background:var(--primary); color:#fff; }
+.btn-green{ background:var(--ok); color:#fff; } .btn-red{ background:var(--stop); color:#fff; }
+.btn-warn{ background:#d97706; color:#fff; }
+.btn-ghost{ background:#fff; border:1px solid #d1d5db; color:#374151; }
+.btn:disabled{ opacity:.6; cursor:not-allowed; }
+/* 卡片 */
+.cards{ display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
+.app-card{ background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:18px; }
+.app-card .head{ display:flex; align-items:center; gap:12px; }
+.ic{ width:42px;height:42px;border-radius:12px;background:#eff6ff;display:flex;align-items:center;justify-content:center;font-size:22px; flex-shrink:0; }
+.card-title{ font-weight:600; font-size:15px; }
+.grp{ font-size:11px; color:var(--muted); background:#f3f4f6; padding:2px 8px; border-radius:8px; }
+.statusline{ font-size:12px; color:var(--muted); margin-top:4px; }
+.dot{ width:9px;height:9px;border-radius:50%; display:inline-block; margin-right:6px; }
+.dot.run{ background:var(--ok); } .dot.stop{ background:var(--stop); } .dot.warn{ background:var(--warn); }
+.infogrid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:14px; }
+.infoitem{ background:#f9fafb; border-radius:10px; padding:8px 10px; }
+.infoitem .k{ font-size:11px; color:var(--muted); margin-bottom:2px; }
+.infoitem .v{ font-size:13px; font-weight:600; word-break:break-all; }
+.badge{ font-size:11px; padding:1px 6px; border-radius:6px; font-weight:500; }
+.badge-venv{ background:#ede9fe; color:#7c3aed; } .badge-docker{ background:#dbeafe; color:#2563eb; } .badge-native{ background:#d1fae5; color:#059669; }
+.cactions{ display:flex; gap:6px; margin-top:14px; flex-wrap:wrap; align-items:center; }
+.cactions .btn{ height:28px; font-size:12px; padding:0 9px; }
+.etag{ cursor:pointer; font-size:11px; padding:2px 7px; border-radius:6px; font-weight:500; }
+.etag.on{ background:#d1fae5; color:#059669; } .etag.off{ background:#fee2e2; color:#ef4444; } .etag.na{ background:#f3f4f6; color:#9ca3af; }
+/* 表格 */
+.tablewrap{ background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:8px; overflow:auto; }
+table.tbl{ width:100%; border-collapse:collapse; font-size:13px; }
+.tbl th,.tbl td{ padding:9px 10px; border-bottom:1px solid #f1f5f9; text-align:left; white-space:nowrap; }
+.tbl th{ background:#f8fafc; color:var(--muted); font-weight:600; cursor:pointer; user-select:none; }
+.tbl th:hover{ color:var(--primary); }
+.tbl tr:hover td{ background:#f8fafc; }
+.tbl .btn{ height:26px; font-size:12px; padding:0 8px; }
+/* 行可点击 + 操作图标按钮 */
+.app-row{ cursor:pointer; transition:.12s; }
+.app-row:hover td{ background:#eef6ff; }
+.app-name{ color:var(--primary); font-weight:600; cursor:pointer; text-decoration:none; }
+.app-name:hover{ text-decoration:underline; }
+.obtn{ width:28px;height:28px;border:none;border-radius:8px;font-size:13px;cursor:pointer;line-height:1;margin-right:4px;transition:.15s; }
+.obtn:disabled{ opacity:.45; cursor:not-allowed; }
+.obtn-start{ background:#d1fae5;color:#059669; } .obtn-start:hover:not(:disabled){ background:#059669;color:#fff; }
+.obtn-stop{ background:#fee2e2;color:#ef4444; } .obtn-stop:hover:not(:disabled){ background:#ef4444;color:#fff; }
+.obtn-restart{ background:#fef3c7;color:#d97706; } .obtn-restart:hover:not(:disabled){ background:#d97706;color:#fff; }
+.obtn-log{ background:#eef2ff;color:#4f46e5; } .obtn-log:hover{ background:#4f46e5;color:#fff; }
+.obtn-doc{ background:#ecfeff;color:#0891b2; } .obtn-doc:hover{ background:#0891b2;color:#fff; }
+.btn-sm{ font-size:12px; padding:3px 10px; }
+.doc-item{ display:flex; align-items:center; gap:10px; padding:8px 12px; background:#f8fafc; border:1px solid #e5e7eb; border-radius:8px; }
+.doc-item .doc-name{ flex:1; font-size:13px; color:#1f2937; word-break:break-all; cursor:default; }
+.doc-item .doc-size{ font-size:12px; color:var(--muted); }
+.doc-item .doc-time{ font-size:12px; color:var(--muted); }
+
+/* Toast 通知 */
+#toastWrap{ position:fixed; top:20px; right:20px; z-index:10001; display:flex; flex-direction:column; gap:10px; pointer-events:none; }
+.toast{ display:flex; align-items:center; gap:10px; min-width:220px; max-width:340px; padding:11px 14px; border-radius:10px; background:#fff; color:#1f2937; font-size:13px; box-shadow:0 8px 24px rgba(15,23,42,.18); border:1px solid #e5e7eb; animation:toastIn .28s ease; pointer-events:auto; }
+.toast .ticon{ width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; color:#fff; flex-shrink:0; }
+.toast.t-success .ticon{ background:#10b981; }
+.toast.t-error .ticon{ background:#ef4444; }
+.toast.t-info .ticon{ background:#3b82f6; }
+.toast.t-warn .ticon{ background:#f59e0b; }
+.toast.out{ opacity:0; transform:translateX(20px); transition:.3s; }
+@keyframes toastIn{ from{ opacity:0; transform:translateX(30px); } to{ opacity:1; transform:translateX(0); } }
+/* 自定义确认弹窗 */
+#modalConfirm .modal{ width:min(380px,92vw); text-align:center; }
+#modalConfirm .mbody{ padding:8px 4px 4px; }
+#modalConfirm .confirm-msg{ font-size:14px; color:#334155; margin:6px 0 18px; line-height:1.6; }
+#modalConfirm .confirm-btns{ display:flex; gap:10px; justify-content:center; }
+/* 弹窗 */
+.modal-mask{ position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:100; }
+.modal{ background:#fff; border-radius:16px; padding:24px; width:min(600px,92vw); max-height:88vh; overflow:auto; box-shadow:0 30px 80px rgba(0,0,0,.3); }
+.modal.modal-lg{ width:min(1100px,96vw); padding:20px; }
+.modal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.modal-head h3{ margin-bottom:0; }
+.modal h3{ font-size:18px; font-weight:700; margin-bottom:16px; }
+.modal .mbody{ display:flex; flex-direction:column; gap:12px; }
+.mrow{ display:flex; align-items:center; gap:10px; }
+.mrow label{ width:90px; font-size:13px; color:var(--muted); flex-shrink:0; }
+.mrow input,.mrow select,.mrow textarea{ flex:1; height:36px; border:1px solid #d1d5db; border-radius:8px; padding:0 10px; font-size:13px; outline:none; }
+.mrow textarea{ height:56px; padding:8px 10px; resize:vertical; }
+.mbtns{ display:flex; justify-content:flex-end; gap:8px; margin-top:8px; }
+.cred-row{ display:flex; align-items:center; gap:8px; }
+.cred-row label{ width:48px; font-size:13px; color:var(--muted); flex-shrink:0; }
+.cred-val{ flex:1; font-family:ui-monospace,Consolas,monospace; font-size:13px; background:#f5f7fa; border:1px solid #e5e7eb; border-radius:6px; padding:6px 10px; word-break:break-all; }
+.copy-cell{ max-width:150px; }
+.copy-cell span{ cursor:pointer; color:var(--primary); word-break:break-all; }
+.copy-cell span:hover{ text-decoration:underline; }
+.pwd-mask{ letter-spacing:2px; font-weight:600; }
+.logbox{ background:#0f172a; color:#e2e8f0; border-radius:12px; padding:14px; height:min(60vh,560px); overflow:auto; font-family:Consolas,monospace; font-size:12px; line-height:1.6; white-space:pre-wrap; }
+.empty{ color:var(--muted); text-align:center; padding:40px; }
+/* 列表加载进度条：导航条正下方通栏，加载时滑动+文字，数据到位隐藏 */
+#loading{ position:fixed; top:62px; left:0; right:0; height:6px; z-index:999; background:#eef2ff; overflow:visible; }
+#loading .bar{ position:absolute; top:0; left:0; height:100%; width:35%; background:linear-gradient(90deg,#3b82f6,#8b5cf6,#ec4899,#3b82f6); background-size:200% 100%; animation:loadslide 1s linear infinite; }
+#loading .ltxt{ position:fixed; top:64px; right:16px; z-index:999; font-size:12px; color:#3b82f6; font-weight:600; letter-spacing:.5px; background:rgba(255,255,255,.92); padding:2px 9px; border-radius:6px; box-shadow:0 1px 4px rgba(0,0,0,.08); display:flex; align-items:center; gap:5px; }
+#loading .ltxt::before{ content:''; width:9px; height:9px; border:2px solid #3b82f6; border-top-color:transparent; border-radius:50%; animation:spin 0.7s linear infinite; }
+#loading.hide{ display:none; }
+#loading.hide .ltxt{ display:none; }
+@keyframes loadslide{ 0%{ transform:translateX(-100%);} 100%{ transform:translateX(350%);} }
+@keyframes spin{ to{ transform:rotate(360deg); } }
+@media(max-width:768px){
+  .topnav{ padding:0 14px; }
+  .topnav-left{ gap:10px; }
+  .brand span{ display:none; }
+  .nav a{ padding:8px 10px; font-size:13px; }
+  .nav a .txt{ font-size:13px; }
+  .uname{ max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .main{ padding:16px; }
+  .cards{ grid-template-columns:1fr; }
+  .ovgrid{ grid-template-columns:1fr 1fr; }
+}
+</style>
+</head>
+<body>
+<!-- 列表加载进度条：顶部通栏，加载中滑动+文字，数据到位隐藏 -->
+<div id="loading" class="hide"><div class="bar"></div><span class="ltxt">加载中…</span></div>
+
+<!-- 登录页（纯原生，永远可用） -->
+<div id="loginPage" class="login-wrap">
+  <canvas id="loginCanvas" class="login-canvas"></canvas>
+  <div class="login-glow g1"></div>
+  <div class="login-glow g2"></div>
+  <div class="login-glow g3"></div>
+  <div class="login-card">
+    <h1>XH<em> Panel</em></h1>
+    <div class="sub">服务器应用管理面板</div>
+    <form id="loginForm">
+      <div class="lfield"><input id="luser" type="text" placeholder="用户名" autocomplete="username"></div>
+      <div class="lfield"><input id="lpass" type="password" placeholder="密码" autocomplete="current-password"></div>
+      <button type="submit" id="lbtn" class="lbtn">登 录</button>
+      <div class="lerr" id="lerr"></div>
+    </form>
+  </div>
+</div>
+
+<!-- 主界面（纯原生 JS 渲染） -->
+<div id="app" style="display:none">
+  <div class="layout">
+    <header class="topnav">
+      <div class="topnav-left">
+        <div class="brand"><div class="logo">🖥️</div><span>XH Panel</span></div>
+        <nav class="nav">
+          <a id="navApps" class="active" onclick="goView('apps')"><span class="txt">📦 应用总览</span></a>
+          <a id="navLogs" onclick="goView('logs')"><span class="txt">📋 操作日志</span></a>
+        </nav>
+      </div>
+      <div class="topnav-right">
+        <div class="userchip" onclick="toggleUserMenu()">
+          <span class="avatar">👤</span>
+          <span class="uname" id="uname"></span>
+          <span class="caret">▾</span>
+        </div>
+        <div class="user-menu" id="userMenu" style="display:none">
+          <div class="um-item" onclick="openPwd()">🔑 修改密码</div>
+          <div class="um-item um-out" onclick="logout()">⏻ 退出登录</div>
+        </div>
+      </div>
+    </header>
+    <main class="main" id="main"></main>
+  </div>
+</div>
+
+<!-- Toast 通知容器 -->
+<div id="toastWrap"></div>
+<!-- 自定义确认弹窗 -->
+<div id="modalConfirm" class="modal-mask" style="display:none">
+  <div class="modal">
+    <div class="mbody">
+      <div class="confirm-msg" id="confirmMsg">确定？</div>
+      <div class="confirm-btns">
+        <button class="btn btn-ghost" id="confirmCancel">取消</button>
+        <button class="btn btn-red" id="confirmOk">确定</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- 管理页登录凭据弹窗（跨源无法自动登录，改为展示可复制凭据） -->
+<div id="modalCred" class="modal-mask" style="display:none" onclick="if(event.target===this)closeModal('modalCred')">
+  <div class="modal" style="width:min(460px,92vw)">
+    <div class="modal-head"><h3 id="credName">管理登录凭据</h3><button class="btn btn-ghost" onclick="closeModal('modalCred')">✕ 关闭</button></div>
+    <div class="mbody">
+      <p style="font-size:13px;color:var(--muted);margin:0">管理页已在新窗口打开。因跨源（不同端口）浏览器禁止自动填表，请复制下方账号密码到管理页登录框粘贴即可。</p>
+      <div class="cred-row"><label>地址</label><span id="credUrl" class="cred-val"></span><button class="btn btn-ghost" onclick="copyCred('credUrl')">复制</button></div>
+      <div class="cred-row"><label>账号</label><span id="credUser" class="cred-val"></span><button class="btn btn-ghost" onclick="copyCred('credUser')">复制</button></div>
+      <div class="cred-row"><label>密码</label><span id="credPwd" class="cred-val"></span><button class="btn btn-ghost" onclick="copyCred('credPwd')">复制</button></div>
+    </div>
+  </div>
+</div>
+<!-- 部署文档弹窗 -->
+<div id="modalDocs" class="modal-mask" style="display:none" onclick="if(event.target===this)closeModal('modalDocs')">
+  <div class="modal modal-lg">
+    <div class="modal-head"><h3 id="docTitle">部署文档</h3><button class="btn btn-ghost" onclick="closeModal('modalDocs')">✕ 关闭</button></div>
+    <div style="margin-bottom:10px">
+      <input type="file" id="docFile" style="display:none" multiple onchange="uploadDoc(event)">
+      <button class="btn btn-primary" onclick="$('docFile').click()">＋ 上传文档（可多选）</button>
+      <span style="font-size:12px;color:var(--muted);margin-left:8px">上传到 MinIO（桶 document）</span>
+    </div>
+    <div id="docList" style="display:flex;flex-direction:column;gap:8px;max-height:55vh;overflow:auto"></div>
+  </div>
+</div>
+<!-- 日志弹窗 -->
+<div id="modalLog" class="modal-mask" style="display:none" onclick="if(event.target===this)closeModal('modalLog')">
+  <div class="modal modal-lg">
+    <div class="modal-head"><h3 id="logTitle">日志</h3><button class="btn btn-ghost" onclick="closeModal('modalLog')">✕ 关闭</button></div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="btn btn-ghost" id="btnFollow" onclick="toggleFollow()">⏸ 暂停跟随</button>
+      <button class="btn btn-ghost" onclick="clrLog()">清空</button>
+      <button class="btn btn-ghost" onclick="reloadLog()">刷新</button>
+    </div>
+    <div class="logbox" id="logBox"></div>
+  </div>
+</div>
+
+<!-- 改密弹窗 -->
+<div id="modalPwd" class="modal-mask" style="display:none" onclick="if(event.target===this)closeModal('modalPwd')">
+  <div class="modal">
+    <h3>修改密码</h3>
+    <div class="mbody">
+      <div class="mrow"><label>旧密码</label><input type="password" id="pOld"></div>
+      <div class="mrow"><label>新密码</label><input type="password" id="pNew" placeholder="至少6位"></div>
+      <div class="mrow"><label>确认</label><input type="password" id="pConfirm"></div>
+    </div>
+    <div class="mbtns"><button class="btn btn-ghost" onclick="closeModal('modalPwd')">取消</button><button class="btn btn-primary" id="pBtn" onclick="submitPwd()">确认修改</button></div>
+  </div>
+</div>
+
+<!-- 应用编辑弹窗 -->
+<div id="modalApp" class="modal-mask" style="display:none" onclick="if(event.target===this)closeModal('modalApp')">
+  <div class="modal">
+    <h3 id="appTitle">新增应用</h3>
+    <div class="mbody">
+      <div class="mrow"><label>名称</label><input id="fName"></div>
+      <div class="mrow"><label>类型</label>
+        <select id="fType"><option value="systemd">systemd 服务</option><option value="docker">docker 容器</option></select></div>
+      <div class="mrow"><label>Unit/容器</label><input id="fUnit" placeholder="如 rerank.service 或容器名"></div>
+      <div class="mrow"><label>端口</label><input id="fPort" placeholder="留空表示无"></div>
+      <div class="mrow"><label>部署方式</label>
+        <select id="fDeploy"><option value="venv">venv</option><option value="docker">docker</option><option value="native">native</option></select></div>
+      <div class="mrow"><label>路径</label><input id="fPath"></div>
+      <div class="mrow"><label>访问地址</label><input id="fWeb"></div>
+      <div class="mrow"><label>管理账号</label><input id="fWebUser" placeholder="管理页登录账号（可选）"></div>
+      <div class="mrow"><label>管理密码</label><input id="fWebPass" placeholder="管理页登录密码（可选）"></div>
+      <div class="mrow"><label>分组</label><input id="fGroup" placeholder="AI/数据库/Web/Docker/存储"></div>
+      <div class="mrow"><label>图标</label><input id="fIcon"></div>
+      <div class="mrow"><label>备注</label><textarea id="fRemark"></textarea></div>
+      <div class="mrow"><label>排序</label><input id="fSort"></div>
+    </div>
+    <div class="mbtns">
+      <button class="btn btn-red" id="delBtn" onclick="confirmDelete()" style="margin-right:auto">删除</button>
+      <button class="btn btn-ghost" onclick="closeModal('modalApp')">取消</button>
+      <button class="btn btn-primary" id="saveBtn" onclick="submitApp()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= 状态 ================= */
+var S = {
+  token: localStorage.getItem('ap_token') || '',
+  username: localStorage.getItem('ap_user') || '',
+  view: 'apps', viewMode: 'table',
+  apps: [], ops: [], gpu:{}, mem:{},
+  lastUpdate:'', sortKey:'sort', sortDir:1,
+  group:'全部', kw:'', fg:'', fs:'', fd:'',
+  editingId:null, acting:{},
+  pollTimer:null, es:null, following:false, logId:null
+};
+
+/* ================= 工具 ================= */
+function $(id){ return document.getElementById(id); }
+function hdr(){ return {'Authorization':'Bearer '+S.token, 'Content-Type':'application/json'}; }
+
+/* 好看的 toast 通知：toast('保存成功','success'|'error'|'info'|'warn') */
+function toast(msg, type){
+  var icons={success:'✓',error:'✕',info:'ℹ',warn:'!'};
+  type=type||'info';
+  var wrap=$('toastWrap');
+  if(!wrap){ wrap=document.createElement('div'); wrap.id='toastWrap'; document.body.appendChild(wrap); }
+  var t=document.createElement('div');
+  t.className='toast t-'+type;
+  t.innerHTML='<span class="ticon">'+(icons[type]||'ℹ')+'</span><span>'+esc(msg)+'</span>';
+  wrap.appendChild(t);
+  setTimeout(function(){ t.classList.add('out'); setTimeout(function(){ t.remove(); },320); }, 2600);
+}
+/* 自定义确认弹窗，返回 Promise<boolean> */
+function confirmBox(msg){
+  return new Promise(function(resolve){
+    var mc=$('modalConfirm');
+    $('confirmMsg').textContent=msg||'确定？';
+    mc.style.display='flex';
+    function done(v){ mc.style.display='none'; mc.removeEventListener('click',h); resolve(v); }
+    function h(e){ if(e.target===mc){ done(false); } }
+    mc.addEventListener('click',h);
+    $('confirmOk').onclick=function(){ done(true); };
+    $('confirmCancel').onclick=function(){ done(false); };
+  });
+}
+async function api(path, opt){
+  var r = await fetch(path, Object.assign({headers:hdr()}, opt||{}));
+  if(r.status===401){ logout(); throw new Error('401'); }
+  return r.json();
+}
+function fmtMB(m){ return m>=1024?(m/1024).toFixed(1)+'G':m+'M'; }
+function statusText(a){ return a.status==='running'?'运行中':(a.status==='stopped'?'已停止':'异常'); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+/* ================= 登录粒子动画 ================= */
+(function(){
+  var cv=document.getElementById('loginCanvas'); if(!cv) return;
+  var ctx=cv.getContext('2d'), w,h, particles=[], raf=null, running=true;
+  function resize(){ w=cv.width=cv.offsetWidth; h=cv.height=cv.offsetHeight; }
+  resize(); window.addEventListener('resize',resize);
+  var colors=['#60a5fa','#a78bfa','#34d399','#22d3ee','#818cf8'];
+  function init(){
+    particles=[];
+    var n=Math.min(90, Math.floor(w*h/16000));
+    for(var i=0;i<n;i++){ particles.push({x:Math.random()*w,y:Math.random()*h,r:Math.random()*2+0.6,vx:(Math.random()-0.5)*0.35,vy:(Math.random()-0.5)*0.35,c:colors[i%colors.length],a:Math.random()*0.5+0.3}); }
+  }
+  init();
+  function link(){
+    for(var i=0;i<particles.length;i++){ for(var j=i+1;j<particles.length;j++){
+      var dx=particles[i].x-particles[j].x, dy=particles[i].y-particles[j].y, d=dx*dx+dy*dy;
+      if(d<13000){ ctx.strokeStyle='rgba(130,160,255,'+(0.16*(1-d/13000))+')'; ctx.beginPath(); ctx.moveTo(particles[i].x,particles[i].y); ctx.lineTo(particles[j].x,particles[j].y); ctx.stroke(); }
+    }}
+  }
+  function tick(){
+    if(!running) return;
+    ctx.clearRect(0,0,w,h);
+    for(var i=0;i<particles.length;i++){ var p=particles[i]; p.x+=p.vx; p.y+=p.vy;
+      if(p.x<0||p.x>w) p.vx*=-1; if(p.y<0||p.y>h) p.vy*=-1;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fillStyle=p.c; ctx.globalAlpha=p.a; ctx.fill(); ctx.globalAlpha=1; }
+    link();
+    raf=requestAnimationFrame(tick);
+  }
+  raf=requestAnimationFrame(tick);
+  // 登录成功后停止动画
+  window.__stopParticles=function(){ running=false; if(raf) cancelAnimationFrame(raf); };
+})();
+
+/* ================= 登录 ================= */
+(function(){
+  var token = localStorage.getItem('ap_token');
+  if(token){ S.token=token; showMain(); return; }
+  $('loginForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    var u=$('luser').value.trim(), p=$('lpass').value;
+    if(!u||!p){ $('lerr').textContent='请输入用户名和密码'; return; }
+    $('lbtn').disabled=true; $('lbtn').textContent='登录中...'; $('lerr').textContent='';
+    fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})})
+      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,d:d}; }); })
+      .then(function(res){
+        if(!res.ok){ $('lerr').textContent=res.d.detail||'登录失败'; $('lbtn').disabled=false; $('lbtn').textContent='登 录'; return; }
+        localStorage.setItem('ap_token',res.d.access_token); localStorage.setItem('ap_user',res.d.username);
+        S.token=res.d.access_token; S.username=res.d.username; showMain();
+      })
+      .catch(function(){ $('lerr').textContent='无法连接服务器'; $('lbtn').disabled=false; $('lbtn').textContent='登 录'; });
+  });
+})();
+
+function showMain(){
+  if(window.__stopParticles) window.__stopParticles();
+  $('loginPage').style.display='none';
+  $('app').style.display='block';
+  $('uname').textContent=S.username;
+  showLoading();
+  initPanel();
+}
+function showLoading(){ var l=$('loading'); if(l) l.classList.remove('hide'); }
+
+/* ================= 主逻辑 ================= */
+async function initPanel(){
+  // 启动校验 token
+  try{
+    var r=await fetch('/api/auth/me',{headers:hdr()});
+    if(r.status===401){ logout(); return; }
+  }catch(e){ logout(); return; }
+  S.pollTimer=setInterval(function(){ if(S.view==='apps') loadAll(false); }, 5000);
+  await loadAll(true);  // 首次进入列表，显示顶部进度条，数据到位隐藏
+  // 默认视图由 S.view 决定（apps→列表），无需强制 renderOps
+}
+
+async function loadAll(showBar){
+  var t0=Date.now();
+  if(showBar) showLoading();
+  try{
+    var ov=await api('/api/overview');
+    var aps=await api('/api/apps');
+    S.gpu=ov.gpu; S.mem=ov.memory; S.cpu=ov.cpu||{}; S.apps=aps;
+    S.lastUpdate=new Date().toLocaleTimeString('zh-CN');
+    // 首次加载至少让进度条可见 0.6s，避免内网太快一闪而过
+    if(showBar){ var el=Date.now()-t0; if(el<600) await new Promise(function(r){setTimeout(r,600-el);}); }
+    hideLoading();
+    render();
+  }catch(e){ hideLoading(); }
+}
+function hideLoading(){ var l=$('loading'); if(l) l.classList.add('hide'); }
+async function loadOps(){
+  try{
+    var r=await fetch('/api/ops',{headers:hdr()});
+    if(r.ok){ S.ops=await r.json(); renderOps(); }
+  }catch(e){}
+}
+
+/* ================= 渲染 ================= */
+function render(){
+  if(S.view==='apps') renderApps(); else renderOps();
+}
+function goView(v){
+  S.view=v;
+  $('navApps').className = v==='apps'?'active':'';
+  $('navLogs').className = v==='logs'?'active':'';
+  closeUserMenu();
+  if(v==='logs') loadOps(); else render();
+}
+function toggleUserMenu(){ var m=$('userMenu'); m.style.display = m.style.display==='none'?'block':'none'; }
+function closeUserMenu(){ var m=$('userMenu'); if(m) m.style.display='none'; }
+document.addEventListener('click', function(e){
+  var chip=e.target.closest?e.target.closest('.userchip'):null;
+  if(!chip && e.target.id!=='userMenu') closeUserMenu();
+});
+
+function renderApps(){
+  var ov=renderOverview();
+
+  var toolbar='<div class="toolbar">'
+    +'<div class="vtoggle"><button id="vmCard" class="'+(S.viewMode==='card'?'active':'')+'" onclick="setMode(\'card\')">▦ 卡片</button><button id="vmTable" class="'+(S.viewMode==='table'?'active':'')+'" onclick="setMode(\'table\')">☰ 列表</button></div>';
+  toolbar+='<button class="btn btn-primary" style="margin-left:auto" onclick="openApp()">＋ 新增应用</button></div>';
+
+  if(S.viewMode==='table'){ renderTable(); return; }
+  // 卡片模式：overview + 工具栏 + 卡片
+  $('main').innerHTML = ov + toolbar + renderCards();
+}
+
+function setMode(m){ S.viewMode=m; render(); }
+
+function cardGroupFilter(a){ return S.group==='全部'||a.group_name===S.group; }
+function filterApp(a){
+  if(S.group!=='全部'&&a.group_name!==S.group) return false;
+  if(S.kw){ var k=S.kw.toLowerCase(); if(!(a.name||'').toLowerCase().includes(k)&&!String(a.port||'').includes(k)&&!(a.path||'').toLowerCase().includes(k)) return false; }
+  if(S.fg&&a.group_name!==S.fg) return false;
+  if(S.fs&&a.status!==S.fs) return false;
+  if(S.fd&&a.deploy_type!==S.fd) return false;
+  return true;
+}
+function filteredApps(){ return S.apps.filter(filterApp); }
+
+function renderCards(){
+  var list=filteredApps();
+  if(!list.length) return '<div class="empty">暂无应用</div>';
+  var groups=['全部'].concat([...new Set(S.apps.map(a=>a.group_name))]);
+  var tabs='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">'
+    +groups.map(function(g){ return '<button class="btn '+(S.group===g?'btn-primary':'btn-ghost')+'" style="border-radius:20px" onclick="S.group=\''+g+'\';render()">'+esc(g)+'</button>'; }).join('')
+    +'</div>';
+  var cards=list.map(function(a){
+    var dot=a.status==='running'?'run':(a.status==='stopped'?'stop':'warn');
+    var etag=a.enabled==='enabled'?'<span class="etag on" onclick="toggleEnable('+a.id+')">✓ 自启</span>':(a.enabled==='disabled'?'<span class="etag off" onclick="toggleEnable('+a.id+')">✕ 不自启</span>':(a.enabled==='n/a'?'<span class="etag na">自启—</span>':'<span class="etag na" onclick="toggleEnable('+a.id+')">自启?</span>'));
+    var acts='';
+    if(a.status!=='running') acts+='<button class="btn btn-green" '+(S.acting[a.id]==='start'?'disabled':'')+' onclick="doAction('+a.id+',\'start\')">▶ 启动</button>';
+    else acts+='<button class="btn btn-red" '+(S.acting[a.id]==='stop'?'disabled':'')+' onclick="doAction('+a.id+',\'stop\')">■ 停止</button>';
+    if(a.status==='running') acts+='<button class="btn btn-warn" '+(S.acting[a.id]==='restart'?'disabled':'')+' onclick="doAction('+a.id+',\'restart\')">⟳ 重启</button>';
+    acts+='<button class="btn btn-ghost" onclick="openLog('+a.id+')">📜 日志</button>';
+    var nameTxt = a.web_url
+      ? '<a href="javascript:void(0)" class="app-name" onclick="openWeb('+a.id+')" title="点击打开管理页">'+esc(a.name)+'</a>'
+      : esc(a.name);
+    return '<div class="app-card">'
+      +'<div class="head"><div class="ic">'+(a.icon||'📦')+'</div><div>'
+      +'<div style="display:flex;align-items:center;gap:8px;"><span class="card-title">'+nameTxt+'</span><span class="grp">'+esc(a.group_name)+'</span></div>'
+      +'<div class="statusline"><span class="dot '+dot+'"></span>'+statusText(a)+' · '+esc(a.unit_name)+'</div></div></div>'
+      +'<div class="infogrid">'
+      +'<div class="infoitem"><div class="k">端口</div><div class="v">'+(a.port||'—')+' <span style="color:'+(a.listening?'var(--ok)':'var(--muted)')+';font-size:11px">'+(a.listening?'监听中':'未监听')+'</span></div></div>'
+      +'<div class="infoitem"><div class="k">部署方式</div><div class="v"><span class="badge badge-'+a.deploy_type+'">'+a.deploy_type+'</span></div></div>'
+      +'<div class="infoitem"><div class="k">显存占用</div><div class="v">'+(a.gpu_mib>0?a.gpu_mib+' MB':'—')+'</div></div>'
+      +'<div class="infoitem"><div class="k">内存占用</div><div class="v">'+(a.mem_mb>0?fmtMB(a.mem_mb):'—')+'</div></div>'
+      +'<div class="infoitem" style="grid-column:1/-1"><div class="k">部署路径</div><div class="v">'+esc(a.path||'—')+'</div></div>'
+      +'<div class="infoitem" style="grid-column:1/-1"><div class="k">备注</div><div class="v">'+esc(a.remark||'—')+'</div></div>'
+      +'</div><div class="cactions">'+etag+acts+'</div></div>';
+  }).join('');
+  return tabs+'<div class="cards">'+cards+'</div>';
+}
+
+function sortedApps(){
+  var list=filteredApps().slice();
+  var k=S.sortKey, dir=S.sortDir;
+  if(k==='sort') list.sort(function(x,y){ return ((x.sort||0)-(y.sort||0)); });
+  else if(k==='status') list.sort(function(x,y){ return ((x.status!=='running')-(y.status!=='running'))*dir; });
+  else list.sort(function(x,y){ var a=x[k],b=y[k]; if(a==null)a=''; if(b==null)b=''; return (a<b?-1:a>b?1:0)*dir; });
+  return list;
+}
+function setSort(k){
+  if(S.sortKey===k) S.sortDir=-S.sortDir; else { S.sortKey=k; S.sortDir=1; }
+  fillTable();
+}
+function renderTable(){
+  // 只构建一次：overview + 工具栏(含搜索/筛选) + 表格骨架
+  var th=theadHtml();
+  $('main').innerHTML = renderOverview() + toolbarHtml()
+    + '<div class="tablewrap"><table class="tbl"><thead id="tHead">'+th+'</thead><tbody id="tBody"></tbody></table></div>';
+  fillTable();
+}
+function theadHtml(){
+  var arrow=function(k){ return S.sortKey===k?(S.sortDir>0?'▲':'▼'):''; };
+  return '<tr><th>操作</th><th onclick="setSort(\'name\')">名称 '+arrow('name')+'</th><th onclick="setSort(\'group_name\')">分组 '+arrow('group_name')+'</th><th onclick="setSort(\'status\')">状态 '+arrow('status')+'</th><th onclick="setSort(\'port\')">端口 '+arrow('port')+'</th><th>监听</th><th onclick="setSort(\'deploy_type\')">部署 '+arrow('deploy_type')+'</th><th onclick="setSort(\'gpu_mib\')">显存 '+arrow('gpu_mib')+'</th><th onclick="setSort(\'mem_mb\')">内存 '+arrow('mem_mb')+'</th><th onclick="setSort(\'health\')">健康 '+arrow('health')+'</th><th>自启</th><th>账号</th><th>密码</th><th>部署路径</th><th>文档</th></tr>';
+}
+// 仅刷新表格体 + 表头排序箭头，不重建工具栏（避免输入框失焦）
+function fillTable(){
+  var rows=sortedApps();
+  var trs=rows.map(function(a){
+    var dot=a.status==='running'?'run':(a.status==='stopped'?'stop':'warn');
+    // 自启规范化：enabled/static/indirect等→自启；disabled→不自启；n/a→随Docker
+    var etag;
+    if(a.enabled==='n/a') etag='<span class="etag na">随Docker</span>';
+    else if(a.enabled==='enabled') etag='<span class="etag on" onclick="event.stopPropagation();toggleEnable('+a.id+')">自启</span>';
+    else if(a.enabled==='disabled') etag='<span class="etag off" onclick="event.stopPropagation();toggleEnable('+a.id+')">不自启</span>';
+    else etag='<span class="etag na" title="'+esc(a.enabled||'')+'">?</span>';
+    // 操作列：启停/重启/日志（图标圆角按钮，点击不触发行编辑）
+    var acts='';
+    if(a.status!=='running') acts+='<button class="obtn obtn-start" title="启动" '+(S.acting[a.id]==='start'?'disabled':'')+' onclick="event.stopPropagation();doAction('+a.id+',\'start\')">▶</button>';
+    else acts+='<button class="obtn obtn-stop" title="停止" '+(S.acting[a.id]==='stop'?'disabled':'')+' onclick="event.stopPropagation();doAction('+a.id+',\'stop\')">■</button>';
+    if(a.status==='running') acts+='<button class="obtn obtn-restart" title="重启" '+(S.acting[a.id]==='restart'?'disabled':'')+' onclick="event.stopPropagation();doAction('+a.id+',\'restart\')">⟳</button>';
+    acts+='<button class="obtn obtn-log" title="查看日志" onclick="event.stopPropagation();openLog('+a.id+')">📜</button>';
+    var ht=healthText(a.status,a.health);
+    // 名称：有管理页则可点击打开（新窗口）
+    var nameHtml = a.web_url
+      ? '<a href="javascript:void(0)" class="app-name" onclick="event.stopPropagation();openWeb('+a.id+')" title="点击打开管理页">'+(a.icon||'')+' '+esc(a.name)+'</a>'
+      : '<span>'+(a.icon||'')+' '+esc(a.name)+'</span>';
+    return '<tr class="app-row" onclick="openApp('+a.id+')" title="点击编辑">'
+      +'<td style="white-space:nowrap">'+acts+'</td>'
+      +'<td style="font-weight:600">'+nameHtml+'</td><td>'+esc(a.group_name)+'</td>'
+      +'<td><span class="dot '+dot+'"></span>'+statusText(a)+'</td><td>'+(a.port||'—')+'</td>'
+      +'<td style="color:'+(a.listening?'var(--ok)':'var(--muted)')+'">'+(a.listening?'是':'否')+'</td>'
+      +'<td><span class="badge badge-'+a.deploy_type+'">'+a.deploy_type+'</span></td>'
+      +'<td>'+(a.gpu_mib>0?a.gpu_mib:'—')+'</td><td>'+(a.mem_mb>0?fmtMB(a.mem_mb):'—')+'</td>'
+      +'<td style="color:'+ht.c+'">'+ht.t+'</td>'
+      +'<td>'+etag+'</td>'
+      +'<td class="copy-cell">'+(a.web_user?'<span title="点击复制账号" onclick="event.stopPropagation();copyText(\''+esc(a.web_user)+'\')">'+esc(a.web_user)+'</span>':'—')+'</td>'
+      +'<td class="copy-cell">'+(a.web_password?'<span class="pwd-mask" title="点击复制密码" onclick="event.stopPropagation();copyText(\''+esc(a.web_password)+'\')">••••••</span>':'—')+'</td>'
+      +'<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">'+esc(a.path||'—')+'</td>'
+      +'<td><button class="obtn obtn-doc" title="部署文档" onclick="event.stopPropagation();openDocs('+a.id+',\''+esc(a.name)+'\')">📄</button></td>'
+      +'</tr>';
+  }).join('');
+  $('tHead').innerHTML=theadHtml();
+  $('tBody').innerHTML=trs||'<tr><td colspan="15" class="empty">暂无应用</td></tr>';
+}
+function refreshTable(){ fillTable(); }
+// 打开应用管理页（新窗口）+ 弹账号密码提示（可复制）
+// 说明：跨源(不同端口)浏览器禁止脚本自动填登录框，故改为展示凭据，用户粘贴即可
+function openWeb(id){
+  var a=S.apps.find(function(x){return x.id===id;}); if(!a||!a.web_url) return;
+  window.open(a.web_url,'_blank');
+  if(a.web_user&&a.web_password){
+    $('credName').textContent=a.name+'  管理登录凭据';
+    $('credUser').textContent=a.web_user;
+    $('credPwd').textContent=a.web_password;
+    $('credUrl').textContent=a.web_url;
+    $('modalCred').style.display='flex';
+  } else if(a.web_url){
+    $('credName').textContent=a.name+'  管理页';
+    $('credUser').textContent='';
+    $('credPwd').textContent='';
+    $('credUrl').textContent=a.web_url;
+    $('modalCred').style.display='flex';
+  }
+}
+function copyCred(id){
+  var el=document.getElementById(id);
+  var range=document.createRange(); range.selectNodeContents(el);
+  var sel=getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  try{ document.execCommand('copy'); }catch(e){}
+  toast('已复制','success');
+}
+function copyText(t){
+  try{ navigator.clipboard.writeText(t).then(function(){ toast('已复制','success'); },function(){ legacyCopy(t); }); }
+  catch(e){ legacyCopy(t); }
+}
+function legacyCopy(t){
+  var ta=document.createElement('textarea'); ta.value=t; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); toast('已复制','success'); }catch(e){}
+  document.body.removeChild(ta);
+}
+
+function renderOverview(){
+  var gpu=S.gpu||{}, mem=S.mem||{}, cpu=S.cpu||{};
+  var memPct=mem.total?Math.round(mem.used/mem.total*100):0;
+  var gpuPct=gpu.total?Math.round(gpu.used/gpu.total*100):0;
+  var cpuUtil=cpu.util||0;
+  var running=S.apps.filter(a=>a.status==='running').length;
+  function bar(pct,color){ return '<div class="mem-bar"><span style="width:'+pct+'%;background:'+color+'"></span></div>'; }
+  return '<div class="ovgrid">'
+    +'<div class="stat"><div class="label">GPU · '+esc(gpu.name||'无')+'</div><div class="value">'+fmtMB(gpu.used)+' <small style="font-size:13px;color:var(--muted)">/ '+fmtMB(gpu.total)+'</small></div>'+bar(gpuPct, gpuPct>85?'var(--stop)':'var(--primary)')+'<div style="font-size:12px;color:var(--muted);margin-top:4px;">显存 '+gpuPct+'% · 利用率 '+(gpu.util||0)+'%</div></div>'
+    +'<div class="stat"><div class="label">内存</div><div class="value">'+fmtMB(mem.used)+' <small style="font-size:13px;color:var(--muted)">/ '+fmtMB(mem.total)+'</small></div>'+bar(memPct, memPct>85?'var(--stop)':'var(--primary)')+'<div style="font-size:12px;color:var(--muted);margin-top:4px;">已用 '+memPct+'%</div></div>'
+    +'<div class="stat"><div class="label">CPU 占用</div><div class="value">'+cpuUtil+'<small style="font-size:13px;color:var(--muted)">%</small></div>'+bar(Math.min(cpuUtil,100), cpuUtil>85?'var(--stop)':(cpuUtil>60?'var(--warn)':'var(--primary)'))+'</div>'
+    +'<div class="stat"><div class="label">服务总数</div><div class="value">'+S.apps.length+'</div><div style="font-size:12px;color:var(--muted);margin-top:6px;">共 '+S.apps.length+' 个应用</div></div>'
+    +'<div class="stat"><div class="label">运行中</div><div class="value" style="color:var(--ok)">'+running+'</div><div style="font-size:12px;color:var(--muted);margin-top:6px;">/ '+S.apps.length+'</div></div>'
+    +'</div>';
+}
+function uniqGroups(){
+  var seen={}, out=[];
+  S.apps.forEach(function(a){ var g=a.group_name||'其他'; if(!seen[g]){ seen[g]=1; out.push(g); } });
+  return out;
+}
+function toolbarHtml(){
+  var h='<div class="toolbar"><div class="vtoggle"><button id="vmCard" class="'+(S.viewMode==='card'?'active':'')+'" onclick="setMode(\'card\')">▦ 卡片</button><button id="vmTable" class="'+(S.viewMode==='table'?'active':'')+'" onclick="setMode(\'table\')">☰ 列表</button></div>';
+  if(S.viewMode==='table'){
+    var gs=uniqGroups();
+    h+='<div class="filters">'
+      +'<input id="fKw" placeholder="搜索名称/端口/路径" value="'+esc(S.kw)+'" oninput="S.kw=this.value;refreshTable()">'
+      +'<select id="fG" onchange="S.fg=this.value;refreshTable()"><option value="">全部分组</option>'+gs.map(function(g){return '<option value="'+esc(g)+'"'+(S.fg===g?' selected':'')+'>'+esc(g)+'</option>';}).join('')+'</select>'
+      +'<select id="fS" onchange="S.fs=this.value;refreshTable()"><option value="">全部状态</option><option value="running"'+(S.fs==='running'?' selected':'')+'>运行中</option><option value="stopped"'+(S.fs==='stopped'?' selected':'')+'>已停止</option></select>'
+      +'<select id="fD" onchange="S.fd=this.value;refreshTable()"><option value="">全部部署</option><option value="venv"'+(S.fd==='venv'?' selected':'')+'>venv</option><option value="docker"'+(S.fd==='docker'?' selected':'')+'>docker</option><option value="native"'+(S.fd==='native'?' selected':'')+'>native</option></select>'
+      +'</div>';
+  }
+  h+='<div style="display:flex;gap:8px;margin-left:auto"><button class="btn btn-ghost" onclick="exportApps()">⬇ 导出</button><button class="btn btn-primary" onclick="openApp()">＋ 新增应用</button></div></div>';
+  return h;
+}
+// 统一健康口径：结合进程状态 + 探活结果，只输出一个权威语义
+// 已停止 → 红色；运行中且探活正常 → 运行中·正常(绿)；运行中但探活异常 → 运行中(蓝)；未知 → 灰
+function healthText(status,h){
+  if(status==='stopped') return {t:'已停止',c:'var(--stop)'};
+  if(status==='running'){
+    if(h==='ok'||h==='healthy') return {t:'运行中·正常',c:'var(--ok)'};
+    return {t:'运行中',c:'var(--primary)'};
+  }
+  if(h==='ok'||h==='healthy') return {t:'正常',c:'var(--ok)'};
+  return {t:'未知',c:'var(--muted)'};
+}
+
+/* ================= 操作 ================= */
+async function doAction(id,act){
+  S.acting[id]=act; render();
+  try{ await api('/api/apps/'+id+'/'+act); await loadAll(); }
+  catch(e){ toast('操作失败','error'); }
+  delete S.acting[id]; render();
+}
+async function toggleEnable(id){
+  var a=S.apps.find(x=>x.id===id); if(!a) return;
+  if(a.enabled==='n/a'){ toast('docker 容器随 docker 服务自启，无独立开关','info'); return; }
+  var target=a.enabled==='enabled'?'disable':'enable';
+  var d=await api('/api/apps/'+id+'/'+target);
+  if(!d.ok){ toast(d.detail||'操作失败','error'); return; }
+  await loadAll();
+}
+
+/* ================= 日志 ================= */
+function openLog(id){
+  var a=S.apps.find(x=>x.id===id); if(!a) return;
+  S.logId=id; S.following=true;
+  $('logTitle').textContent='日志 · '+a.name;
+  $('modalLog').style.display='flex';
+  $('logBox').textContent='加载中...';
+  reloadLog(); startFollow();
+}
+async function reloadLog(){
+  var d=await api('/api/apps/'+S.logId+'/logs?tail=300');
+  $('logBox').textContent = d.logs||'';
+  $('logBox').scrollTop=$('logBox').scrollHeight;
+}
+function startFollow(){
+  if(S.es) S.es.close();
+  S.es=new EventSource('/api/apps/'+S.logId+'/logs/follow');
+  S.es.onmessage=function(ev){
+    if(!S.following) return;
+    try{ var d=JSON.parse(ev.data); $('logBox').textContent+=d.line; }catch(e){}
+    if($('logBox').textContent.length>200000) $('logBox').textContent=$('logBox').textContent.slice(-150000);
+    $('logBox').scrollTop=$('logBox').scrollHeight;
+  };
+}
+function toggleFollow(){ S.following=!S.following; $('btnFollow').textContent=S.following?'⏸ 暂停跟随':'▶ 实时跟随'; }
+function clrLog(){ $('logBox').textContent=''; }
+
+/* ================= 导出 ================= */
+function exportApps(){
+  var url='/api/apps/export';
+  var a=document.createElement('a');
+  fetch(url,{headers:hdr()}).then(function(r){ return r.blob(); }).then(function(b){
+    var u=URL.createObjectURL(b); a.href=u; a.download='apps.csv'; a.click(); URL.revokeObjectURL(u);
+  }).catch(function(e){ toast('导出失败','error'); });
+}
+
+/* ================= 部署文档 ================= */
+function openDocs(id,name){
+  S.docAppId=id;
+  $('docTitle').textContent='部署文档 · '+name;
+  $('docList').innerHTML='<div class="empty">加载中...</div>';
+  $('modalDocs').style.display='flex';
+  loadDocs();
+}
+async function loadDocs(){
+  var d=await api('/api/apps/'+S.docAppId+'/docs');
+  var box=$('docList');
+  if(!d.length){ box.innerHTML='<div class="empty">暂无文档，可上传部署文档/资料</div>'; return; }
+  box.innerHTML=d.map(function(x){
+    return '<div class="doc-item"><span class="doc-name" title="'+esc(x.filename)+'">📎 '+esc(x.filename)+'</span>'
+      +'<span class="doc-size">'+(x.size>1048576?(x.size/1048576).toFixed(1)+'MB':(x.size>1024?(x.size/1024).toFixed(1)+'KB':x.size+'B'))+'</span>'
+      +'<span class="doc-time">'+esc(x.created_at||'')+'</span>'
+      +'<div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm" onclick="viewDoc('+x.id+')">查看</button>'
+      +'<button class="btn btn-red btn-sm" onclick="delDoc('+x.id+')">删除</button></div></div>';
+  }).join('');
+}
+async function delDoc(docId){
+  if(!await confirmBox('删除该文档？')) return;
+  await api('/api/apps/'+S.docAppId+'/docs/'+docId,{method:'DELETE'});
+  toast('已删除','success');
+  loadDocs();
+}
+async function viewDoc(docId){
+  try{
+    var r=await fetch('/api/apps/'+S.docAppId+'/docs/'+docId+'/download',{headers:{'Authorization':'Bearer '+S.token}});
+    if(!r.ok){ toast('打开失败','error'); return; }
+    var blob=await r.blob();
+    var u=URL.createObjectURL(blob);
+    window.open(u,'_blank');
+  }catch(e){ toast('打开失败','error'); }
+}
+async function uploadDoc(ev){
+  var input=ev.target; if(!input.files||!input.files.length) return;
+  var files=Array.prototype.slice.call(input.files);
+  var ok=0, fail=0;
+  for(var i=0;i<files.length;i++){
+    var fd=new FormData();
+    fd.append('file', files[i]);
+    try{
+      var r=await fetch('/api/apps/'+S.docAppId+'/docs',{method:'POST',headers:{'Authorization':'Bearer '+S.token},body:fd});
+      var d=await r.json();
+      if(r.ok){ ok++; } else { fail++; }
+    }catch(e){ fail++; }
+  }
+  input.value='';
+  if(files.length>1) toast(fail>0?'已上传 '+ok+' 个，失败 '+fail+' 个':'已上传 '+ok+' 个文件','success');
+  loadDocs();
+}
+
+/* ================= 改密 ================= */
+function openPwd(){ $('pOld').value=''; $('pNew').value=''; $('pConfirm').value=''; $('modalPwd').style.display='flex'; }
+async function submitPwd(){
+  var o=$('pOld').value, n=$('pNew').value, c=$('pConfirm').value;
+  if(n.length<6){ toast('新密码至少6位','warn'); return; }
+  if(n!==c){ toast('两次密码不一致','warn'); return; }
+  $('pBtn').disabled=true;
+  var r=await fetch('/api/auth/change-password',{method:'POST',headers:hdr(),body:JSON.stringify({old_password:o,new_password:n})});
+  var d=await r.json();
+  if(!r.ok){ toast(d.detail||'修改失败','error'); $('pBtn').disabled=false; return; }
+  toast('密码已修改，请重新登录','success'); closeModal('modalPwd'); setTimeout(logout,600);
+}
+
+/* ================= 应用编辑 ================= */
+function openApp(id){
+  S.editingId=id||null;
+  var a = id? S.apps.find(x=>x.id===id):null;
+  $('appTitle').textContent = a?('编辑应用 · '+a.name):'新增应用';
+  $('delBtn').style.display = a?'inline-block':'none';
+  $('fName').value=a?a.name:'';
+  $('fType').value=a?a.type:'systemd';
+  $('fUnit').value=a?a.unit_name:'';
+  $('fPort').value=a&&a.port!=null?a.port:'';
+  $('fDeploy').value=a?a.deploy_type:'venv';
+  $('fPath').value=a?a.path||'':'';
+  $('fWeb').value=a?a.web_url||'':'';
+  $('fWebUser').value=a?a.web_user||'':'';
+  $('fWebPass').value=a?a.web_password||'':'';
+  $('fGroup').value=a?a.group_name:'AI';
+  $('fIcon').value=a?a.icon:'📦';
+  $('fRemark').value=a?a.remark||'':'';
+  $('fSort').value=a&&a.sort!=null?a.sort:0;
+  $('modalApp').style.display='flex';
+}
+async function submitApp(){
+  var payload={name:$('fName').value.trim(), type:$('fType').value, unit_name:$('fUnit').value.trim(),
+    port:$('fPort').value?Number($('fPort').value):null, deploy_type:$('fDeploy').value,
+    path:$('fPath').value.trim(), web_url:$('fWeb').value.trim(), group_name:$('fGroup').value.trim()||'其他',
+    icon:$('fIcon').value.trim()||'📦', remark:$('fRemark').value.trim(), sort:Number($('fSort').value||0),
+    web_user:$('fWebUser').value.trim(), web_password:$('fWebPass').value};
+  if(!payload.name||!payload.unit_name){ toast('名称和Unit/容器名必填','warn'); return; }
+  $('saveBtn').disabled=true;
+  var method=S.editingId?'PUT':'POST';
+  var url=S.editingId?'/api/apps/'+S.editingId:'/api/apps';
+  var r=await fetch(url,{method:method,headers:hdr(),body:JSON.stringify(payload)});
+  var d=await r.json();
+  if(!r.ok){ toast(d.detail||'保存失败','error'); $('saveBtn').disabled=false; return; }
+  toast('已保存','success'); closeModal('modalApp'); await loadAll();
+}
+async function confirmDelete(){
+  if(!S.editingId) return;
+  if(!await confirmBox('确定删除该应用？')) return;
+  var r=await fetch('/api/apps/'+S.editingId,{method:'DELETE',headers:hdr()});
+  if(!r.ok){ toast('删除失败','error'); return; }
+  toast('已删除','success'); closeModal('modalApp'); await loadAll();
+}
+
+/* ================= 操作日志视图 ================= */
+function renderOps(){
+  var rows=S.ops||[];
+  var h=renderOverview()+'<div style="background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:8px;overflow:auto;"><table class="tbl"><thead><tr><th>时间</th><th>用户</th><th>操作</th><th>对象</th><th>详情</th></tr></thead><tbody>';
+  h+=rows.map(function(o){ return '<tr><td>'+esc(o.created_at)+'</td><td>'+esc(o.username)+'</td><td>'+esc(o.action)+'</td><td>'+esc(o.target)+'</td><td style="max-width:300px;overflow:hidden;text-overflow:ellipsis">'+esc(o.detail||'')+'</td></tr>'; }).join('');
+  h+='</tbody></table></div>';
+  $('main').innerHTML=h;
+}
+
+/* ================= 弹窗 & 退出 ================= */
+function closeModal(id){ $(id).style.display='none'; }
+function logout(){
+  localStorage.removeItem('ap_token'); localStorage.removeItem('ap_user');
+  if(S.pollTimer) clearInterval(S.pollTimer);
+  if(S.es) S.es.close();
+  location.reload();
+}
+</script>
+</body>
+</html>
