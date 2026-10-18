@@ -102,6 +102,8 @@ def init_db():
         cur.execute("ALTER TABLE apps ADD COLUMN web_user TEXT DEFAULT ''")
     if "web_password" not in cols:
         cur.execute("ALTER TABLE apps ADD COLUMN web_password TEXT DEFAULT ''")
+    if "parent_id" not in cols:
+        cur.execute("ALTER TABLE apps ADD COLUMN parent_id INTEGER DEFAULT NULL")
     conn.commit()
 
     # 默认管理员：admin / 123456（仅首次初始化，生产请通过环境变量指定并尽快修改）

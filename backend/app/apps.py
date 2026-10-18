@@ -135,6 +135,7 @@ class AppIn(BaseModel):
     sort: int = 0
     web_user: str = ""
     web_password: str = ""
+    parent_id: int | None = None
 
 
 @router.post("/apps")
@@ -142,11 +143,11 @@ def add_app(data: AppIn, user: str = Depends(get_current_user)):
     conn = get_conn()
     try:
         cur = conn.execute("""
-            INSERT INTO apps (name,type,unit_name,port,deploy_type,path,web_url,group_name,icon,remark,sort,web_user,web_password)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+            INSERT INTO apps (name,type,unit_name,port,deploy_type,path,web_url,group_name,icon,remark,sort,web_user,web_password,parent_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (data.name, data.type, data.unit_name, data.port, data.deploy_type,
               data.path, data.web_url, data.group_name, data.icon, data.remark, data.sort,
-              data.web_user, data.web_password))
+              data.web_user, data.web_password, data.parent_id))
         conn.commit()
         new_id = cur.lastrowid
     except Exception as e:
@@ -175,11 +176,11 @@ def update_app(app_id: int, data: AppIn, user: str = Depends(get_current_user)):
     try:
         conn.execute("""
             UPDATE apps SET name=?, type=?, unit_name=?, port=?, deploy_type=?, path=?,
-                web_url=?, group_name=?, icon=?, remark=?, sort=?, web_user=?, web_password=?
+                web_url=?, group_name=?, icon=?, remark=?, sort=?, web_user=?, web_password=?, parent_id=?
             WHERE id=?
         """, (data.name, data.type, data.unit_name, data.port, data.deploy_type,
               data.path, data.web_url, data.group_name, data.icon, data.remark, data.sort,
-              data.web_user, data.web_password, app_id))
+              data.web_user, data.web_password, data.parent_id, app_id))
         conn.commit()
     except Exception as e:
         conn.close()

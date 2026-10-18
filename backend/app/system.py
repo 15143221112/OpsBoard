@@ -223,6 +223,8 @@ def app_status(app):
         "group_name": app["group_name"],
         "icon": app["icon"],
         "remark": app["remark"],
+        "sort": app.get("sort", 0),
+        "parent_id": app.get("parent_id"),
         "status": status,
         "listening": listening,
         "mem_mb": mem_mb,

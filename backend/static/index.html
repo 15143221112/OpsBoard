@@ -112,6 +112,10 @@ table.tbl{ width:100%; border-collapse:collapse; font-size:13px; }
 /* 行可点击 + 操作图标按钮 */
 .app-row{ cursor:pointer; transition:.12s; }
 .app-row:hover td{ background:#eef6ff; }
+.kid-row td{ font-size:12.5px; }
+.gtog{ display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:6px; background:#e0e7ff; color:#4f46e5; font-weight:700; cursor:pointer; margin-right:6px; transition:.15s; font-size:14px; line-height:1; }
+.gtog:hover{ background:#4f46e5; color:#fff; }
+.gtog-leaf{ display:inline-block; width:20px; margin-right:6px; }
 .app-name{ color:var(--primary); font-weight:600; cursor:pointer; text-decoration:none; }
 .app-name:hover{ text-decoration:underline; }
 .obtn{ width:28px;height:28px;border:none;border-radius:8px;font-size:13px;cursor:pointer;line-height:1;margin-right:4px;transition:.15s; }
@@ -338,7 +342,8 @@ var S = {
   lastUpdate:'', sortKey:'sort', sortDir:1,
   group:'全部', kw:'', fg:'', fs:'', fd:'',
   editingId:null, acting:{},
-  pollTimer:null, es:null, following:false, logId:null
+  pollTimer:null, es:null, following:false, logId:null,
+  expanded:{} // 展开的主服务 id 集合
 };
 
 /* ================= 工具 ================= */
@@ -556,13 +561,35 @@ function renderCards(){
 function sortedApps(){
   var list=filteredApps().slice();
   var k=S.sortKey, dir=S.sortDir;
-  if(k==='sort') list.sort(function(x,y){
-    // 运行中在前，同状态再按 sort 排序
-    var sx=x.status==='running'?0:(x.status==='stopped'?1:2);
-    var sy=y.status==='running'?0:(y.status==='stopped'?1:2);
-    if(sx!==sy) return sx-sy;
-    return ((x.sort||0)-(y.sort||0))*dir;
-  });
+  // 稳定排序，保持父子分组：主服务在前，子服务紧跟其父
+  if(k==='sort'){
+    // 显式分组排序：主服务按(running,sort)，子服务归入其父之后
+    var byId={}; list.forEach(function(a){ byId[a.id]=a; });
+    var kidsByPar={};
+    list.forEach(function(a){ if(a.parent_id!=null){ (kidsByPar[a.parent_id]=kidsByPar[a.parent_id]||[]).push(a); } });
+    var out=[];
+    // 先主服务（parent为null）
+    var mains=list.filter(function(a){ return a.parent_id==null; });
+    mains.sort(function(x,y){
+      var sx=x.status==='running'?0:(x.status==='stopped'?1:2);
+      var sy=y.status==='running'?0:(y.status==='stopped'?1:2);
+      if(sx!==sy) return sx-sy;
+      return ((x.sort||0)-(y.sort||0))*dir;
+    });
+    mains.forEach(function(m){
+      out.push(m);
+      (kidsByPar[m.id]||[]).sort(function(x,y){
+        var sx=x.status==='running'?0:(x.status==='stopped'?1:2);
+        var sy=y.status==='running'?0:(y.status==='stopped'?1:2);
+        if(sx!==sy) return sx-sy;
+        return ((x.sort||0)-(y.sort||0))*dir;
+      }).forEach(function(c){ out.push(c); });
+    });
+    // 孤儿子服务（父被过滤掉）也追尾
+    var used={}; out.forEach(function(a){ used[a.id]=1; });
+    list.forEach(function(a){ if(!used[a.id]) out.push(a); });
+    return out;
+  }
   else if(k==='status') list.sort(function(x,y){ return ((x.status!=='running')-(y.status!=='running'))*dir; });
   else list.sort(function(x,y){ var a=x[k],b=y[k]; if(a==null)a=''; if(b==null)b=''; return (a<b?-1:a>b?1:0)*dir; });
   return list;
@@ -585,8 +612,18 @@ function theadHtml(){
 // 仅刷新表格体 + 表头排序箭头，不重建工具栏（避免输入框失焦）
 function fillTable(){
   var rows=sortedApps();
+  // 统计每个主服务的子服务数（用于加号）
+  var kidsCount={}; rows.forEach(function(a){ if(a.parent_id!=null){ kidsCount[a.parent_id]=(kidsCount[a.parent_id]||0)+1; } });
   var trs=rows.map(function(a){
     var dot=a.status==='running'?'run':(a.status==='stopped'?'stop':'warn');
+    var isMain=a.parent_id==null, isKid=a.parent_id!=null;
+    // 子服务：父未展开则跳过
+    if(isKid && !S.expanded[a.parent_id]) return '';
+    var indent=isKid?' style="padding-left:34px;color:var(--muted)"':'';
+    // 主服务且有子服务 → 加号/减号
+    var tog = (isMain && kidsCount[a.id]>0)
+      ? '<span class="gtog" onclick="event.stopPropagation();toggleGroup('+a.id+')" title="'+(S.expanded[a.id]?'收起':'展开')+'子服务">'+(S.expanded[a.id]?'−':'+')+'</span>'
+      : (isKid?'<span class="gtog-leaf"></span>':'');
     // 自启规范化：enabled/static/indirect等→自启；disabled→不自启；n/a→随Docker
     var etag;
     if(a.enabled==='n/a') etag='<span class="etag na">随Docker</span>';
@@ -604,9 +641,10 @@ function fillTable(){
     var nameHtml = a.web_url
       ? '<a href="javascript:void(0)" class="app-name" onclick="event.stopPropagation();openWeb('+a.id+')" title="点击打开管理页">'+(a.icon||'')+' '+esc(a.name)+'</a>'
       : '<span>'+(a.icon||'')+' '+esc(a.name)+'</span>';
-    return '<tr class="app-row" onclick="openApp('+a.id+')" title="点击编辑">'
+    var gcls=isKid?' class="app-row kid-row"':' class="app-row"';
+    return '<tr'+gcls+' onclick="openApp('+a.id+')" title="点击编辑">'
       +'<td style="white-space:nowrap">'+acts+'</td>'
-      +'<td style="font-weight:600">'+nameHtml+'</td><td>'+esc(a.group_name)+'</td>'
+      +'<td style="font-weight:600"'+indent+'>'+tog+nameHtml+'</td><td>'+esc(a.group_name)+'</td>'
       +'<td><span class="dot '+dot+'"></span>'+statusText(a)+'</td><td>'+(a.port||'—')+'</td>'
       +'<td style="color:'+(a.listening?'var(--ok)':'var(--muted)')+'">'+(a.listening?'是':'否')+'</td>'
       +'<td><span class="badge badge-'+a.deploy_type+'">'+a.deploy_type+'</span></td>'
@@ -621,6 +659,9 @@ function fillTable(){
   }).join('');
   $('tHead').innerHTML=theadHtml();
   $('tBody').innerHTML=trs||'<tr><td colspan="15" class="empty">暂无应用</td></tr>';
+}
+function toggleGroup(id){
+  S.expanded[id]=!S.expanded[id]; fillTable();
 }
 function refreshTable(){ fillTable(); }
 // 打开应用管理页（新窗口）+ 弹账号密码提示（可复制）
