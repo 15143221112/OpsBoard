@@ -556,7 +556,13 @@ function renderCards(){
 function sortedApps(){
   var list=filteredApps().slice();
   var k=S.sortKey, dir=S.sortDir;
-  if(k==='sort') list.sort(function(x,y){ return ((x.sort||0)-(y.sort||0)); });
+  if(k==='sort') list.sort(function(x,y){
+    // 运行中在前，同状态再按 sort 排序
+    var sx=x.status==='running'?0:(x.status==='stopped'?1:2);
+    var sy=y.status==='running'?0:(y.status==='stopped'?1:2);
+    if(sx!==sy) return sx-sy;
+    return ((x.sort||0)-(y.sort||0))*dir;
+  });
   else if(k==='status') list.sort(function(x,y){ return ((x.status!=='running')-(y.status!=='running'))*dir; });
   else list.sort(function(x,y){ var a=x[k],b=y[k]; if(a==null)a=''; if(b==null)b=''; return (a<b?-1:a>b?1:0)*dir; });
   return list;
@@ -779,13 +785,8 @@ async function delDoc(docId){
   loadDocs();
 }
 async function viewDoc(docId){
-  try{
-    var r=await fetch('/api/apps/'+S.docAppId+'/docs/'+docId+'/download',{headers:{'Authorization':'Bearer '+S.token}});
-    if(!r.ok){ toast('打开失败','error'); return; }
-    var blob=await r.blob();
-    var u=URL.createObjectURL(blob);
-    window.open(u,'_blank');
-  }catch(e){ toast('打开失败','error'); }
+  // 后端 download 接口支持 ?token= 鉴权 + inline 预览（带正确后缀/MIME），新窗口直接打开
+  window.open('/api/apps/'+S.docAppId+'/docs/'+docId+'/download?token='+encodeURIComponent(S.token),'_blank');
 }
 async function uploadDoc(ev){
   var input=ev.target; if(!input.files||!input.files.length) return;

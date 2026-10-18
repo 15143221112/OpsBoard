@@ -21,6 +21,18 @@ def _all_apps():
     return [dict(r) for r in rows]
 
 
+def _running_first(apps):
+    """运行中在前，同状态保持原 sort 顺序（稳定排序）"""
+    def key(a):
+        st = a.get("status", "")
+        if st == "running":
+            return 0
+        if st == "stopped":
+            return 1
+        return 2
+    return sorted(apps, key=key)
+
+
 def _get_app(app_id: int):
     conn = get_conn()
     row = conn.execute("SELECT * FROM apps WHERE id=?", (app_id,)).fetchone()
@@ -36,7 +48,7 @@ def list_apps(user: str = Depends(get_current_user)):
     # 并发采集状态，避免串行拖慢
     with ThreadPoolExecutor(max_workers=8) as ex:
         results = list(ex.map(system.app_status, apps))
-    return results
+    return _running_first(results)
 
 
 @router.get("/apps/export")

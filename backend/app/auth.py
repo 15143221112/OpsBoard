@@ -39,12 +39,10 @@ def verify_user(username: str, password: str):
     return row
 
 
-def get_current_user(authorization: str = Header(None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="未登录")
-    token = authorization.split(" ")[1]
+def get_user_from_token(raw_token: str) -> str:
+    """校验 token 返回 username，供 header 或 query 两种方式复用"""
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(raw_token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="登录已过期")
@@ -53,6 +51,13 @@ def get_current_user(authorization: str = Header(None)):
     if not username:
         raise HTTPException(status_code=401, detail="无效令牌")
     return username
+
+
+def get_current_user(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="未登录")
+    token = authorization.split(" ")[1]
+    return get_user_from_token(token)
 
 
 @router.post("/login", response_model=TokenResp)

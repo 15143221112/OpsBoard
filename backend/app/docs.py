@@ -2,11 +2,11 @@
 import os
 import time
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from .auth import get_current_user
+from .auth import get_current_user, get_user_from_token
 from .db import get_conn, log_operation
 
 router = APIRouter(prefix="/api", tags=["docs"])
@@ -20,6 +20,18 @@ MINIO_PUBLIC_BASE = os.environ.get("APP_PANEL_MINIO_PUBLIC", "")
 
 _client = None
 _bucket_checked = False
+
+
+def get_current_user_allow_query(authorization: str = Header(None), token: str = Query(None)):
+    """文档预览/下载鉴权：优先 header Bearer，其次 ?token= 查询参数（供 window.open 新窗口打开）"""
+    raw = None
+    if authorization and authorization.startswith("Bearer "):
+        raw = authorization.split(" ")[1]
+    elif token:
+        raw = token
+    if not raw:
+        raise HTTPException(status_code=401, detail="未登录")
+    return get_user_from_token(raw)
 
 
 def _get_client():
@@ -56,8 +68,11 @@ def list_docs(app_id: int, user: str = Depends(get_current_user)):
 
 
 @router.get("/apps/{app_id}/docs/{doc_id}/download")
-def download_doc(app_id: int, doc_id: int, user: str = Depends(get_current_user)):
-    """通过面板代理下载文档，避免跳转到 MinIO 登录页"""
+def download_doc(app_id: int, doc_id: int,
+                 authorization: str = Header(None),
+                 token: str = Query(None),
+                 user: str = Depends(get_current_user_allow_query)):
+    """通过面板代理下载/预览文档（inline），支持 header 或 ?token= 鉴权"""
     conn = get_conn()
     row = conn.execute("SELECT * FROM app_docs WHERE id=? AND app_id=?", (doc_id, app_id)).fetchone()
     conn.close()
@@ -67,11 +82,23 @@ def download_doc(app_id: int, doc_id: int, user: str = Depends(get_current_user)
         c = _get_client()
         obj = c.get_object(MINIO_BUCKET, row["key"])
         import urllib.parse
-        fname = urllib.parse.quote(row["filename"])
+        fname = row["filename"]
+        # 按扩展名给正确 MIME，浏览器才能内联预览（带后缀名）
+        ext = os.path.splitext(fname)[1].lower()
+        mime = {
+            ".md": "text/markdown; charset=utf-8", ".markdown": "text/markdown; charset=utf-8",
+            ".txt": "text/plain; charset=utf-8", ".log": "text/plain; charset=utf-8",
+            ".json": "application/json", ".yaml": "text/yaml", ".yml": "text/yaml",
+            ".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp",
+            ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8",
+            ".csv": "text/csv; charset=utf-8",
+        }.get(ext, "application/octet-stream")
+        quoted = urllib.parse.quote(fname)
         return StreamingResponse(
             obj.stream(),
-            media_type="application/octet-stream",
-            headers={"Content-Disposition": f'attachment; filename*=UTF-8\'\'{fname}'},
+            media_type=mime,
+            headers={"Content-Disposition": f"inline; filename*=UTF-8''{quoted}"},
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"读取失败: {e}")
