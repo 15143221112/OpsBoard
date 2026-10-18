@@ -158,11 +158,9 @@ app-panel/
 
 ## 📸 截图
 
-> 截图占位：可在 `docs/screenshots/` 放置登录页、总览列表、趋势图、文档弹窗截图。
-
-| 登录页 | 应用总览 |
+| 应用总览（实时资源监控 + 列表） | 应用总览（卡片视图） |
 |---|---|
-| ![login](docs/screenshots/login.png) | ![overview](docs/screenshots/overview.png) |
+| ![overview](docs/assets/screenshot.png) | ![overview-card](docs/assets/screenshot.png) |
 
 ---
 
