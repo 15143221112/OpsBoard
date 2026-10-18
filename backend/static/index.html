@@ -116,6 +116,7 @@ table.tbl{ width:100%; border-collapse:collapse; font-size:13px; }
 .gtog{ display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:6px; background:#e0e7ff; color:#4f46e5; font-weight:700; cursor:pointer; margin-right:6px; transition:.15s; font-size:14px; line-height:1; }
 .gtog:hover{ background:#4f46e5; color:#fff; }
 .gtog-leaf{ display:inline-block; width:20px; margin-right:6px; }
+.selrow,.selall{ width:16px;height:16px; accent-color:var(--primary); cursor:pointer; }
 .app-name{ color:var(--primary); font-weight:600; cursor:pointer; text-decoration:none; }
 .app-name:hover{ text-decoration:underline; }
 .obtn{ width:28px;height:28px;border:none;border-radius:8px;font-size:13px;cursor:pointer;line-height:1;margin-right:4px;transition:.15s; }
@@ -343,7 +344,8 @@ var S = {
   group:'全部', kw:'', fg:'', fs:'', fd:'',
   editingId:null, acting:{},
   pollTimer:null, es:null, following:false, logId:null,
-  expanded:{} // 展开的主服务 id 集合
+  expanded:{}, // 展开的主服务 id 集合
+  sel:{} // 勾选待删除的应用 id 集合
 };
 
 /* ================= 工具 ================= */
@@ -607,7 +609,8 @@ function renderTable(){
 }
 function theadHtml(){
   var arrow=function(k){ return S.sortKey===k?(S.sortDir>0?'▲':'▼'):''; };
-  return '<tr><th>操作</th><th onclick="setSort(\'name\')">名称 '+arrow('name')+'</th><th onclick="setSort(\'group_name\')">分组 '+arrow('group_name')+'</th><th onclick="setSort(\'status\')">状态 '+arrow('status')+'</th><th onclick="setSort(\'port\')">端口 '+arrow('port')+'</th><th>监听</th><th onclick="setSort(\'deploy_type\')">部署 '+arrow('deploy_type')+'</th><th onclick="setSort(\'gpu_mib\')">显存 '+arrow('gpu_mib')+'</th><th onclick="setSort(\'mem_mb\')">内存 '+arrow('mem_mb')+'</th><th onclick="setSort(\'health\')">健康 '+arrow('health')+'</th><th>自启</th><th>账号</th><th>密码</th><th>部署路径</th><th>文档</th></tr>';
+  var allChecked=rowsAllChecked();
+  return '<tr><th style="width:32px"><input type="checkbox" class="selall" '+(allChecked?'checked':'')+' onclick="toggleAll(this.checked)" title="全选"></th><th>操作</th><th onclick="setSort(\'name\')">名称 '+arrow('name')+'</th><th onclick="setSort(\'group_name\')">分组 '+arrow('group_name')+'</th><th onclick="setSort(\'status\')">状态 '+arrow('status')+'</th><th onclick="setSort(\'port\')">端口 '+arrow('port')+'</th><th>监听</th><th onclick="setSort(\'deploy_type\')">部署 '+arrow('deploy_type')+'</th><th onclick="setSort(\'gpu_mib\')">显存 '+arrow('gpu_mib')+'</th><th onclick="setSort(\'mem_mb\')">内存 '+arrow('mem_mb')+'</th><th onclick="setSort(\'health\')">健康 '+arrow('health')+'</th><th>自启</th><th>账号</th><th>密码</th><th>部署路径</th><th>文档</th></tr>';
 }
 // 仅刷新表格体 + 表头排序箭头，不重建工具栏（避免输入框失焦）
 function fillTable(){
@@ -643,6 +646,7 @@ function fillTable(){
       : '<span>'+(a.icon||'')+' '+esc(a.name)+'</span>';
     var gcls=isKid?' class="app-row kid-row"':' class="app-row"';
     return '<tr'+gcls+' onclick="openApp('+a.id+')" title="点击编辑">'
+      +'<td style="text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="selrow" '+(S.sel[a.id]?'checked':'')+' onclick="toggleSel('+a.id+',this.checked)"></td>'
       +'<td style="white-space:nowrap">'+acts+'</td>'
       +'<td style="font-weight:600"'+indent+'>'+tog+nameHtml+'</td><td>'+esc(a.group_name)+'</td>'
       +'<td><span class="dot '+dot+'"></span>'+statusText(a)+'</td><td>'+(a.port||'—')+'</td>'
@@ -658,10 +662,48 @@ function fillTable(){
       +'</tr>';
   }).join('');
   $('tHead').innerHTML=theadHtml();
-  $('tBody').innerHTML=trs||'<tr><td colspan="15" class="empty">暂无应用</td></tr>';
+  $('tBody').innerHTML=trs||'<tr><td colspan="16" class="empty">暂无应用</td></tr>';
+  refreshSelBtn();
 }
 function toggleGroup(id){
   S.expanded[id]=!S.expanded[id]; fillTable();
+}
+/* ---- 批量删除勾选 ---- */
+function toggleSel(id,chk){
+  if(chk) S.sel[id]=1; else delete S.sel[id];
+  refreshSelBtn();
+}
+function toggleAll(chk){
+  var rows=sortedApps();
+  if(chk){ rows.forEach(function(a){ S.sel[a.id]=1; }); }
+  else { S.sel={}; }
+  refreshSelBtn();
+}
+function rowsAllChecked(){
+  var rows=sortedApps();
+  if(!rows.length) return false;
+  return rows.every(function(a){ return !!S.sel[a.id]; });
+}
+function refreshSelBtn(){
+  var n=selCount();
+  var b=$('delSelBtn');
+  if(b){ b.style.display=n>0?'':'none'; $('delSelCount').textContent=n; }
+}
+async function batchDelete(){
+  var ids=Object.keys(S.sel||{}).map(Number);
+  if(!ids.length){ toast('请先勾选要删除的应用','warn'); return; }
+  if(!await confirmBox('确定删除选中的 '+ids.length+' 个应用？删除后不可恢复')) return;
+  var ok=0, fail=0;
+  for(var i=0;i<ids.length;i++){
+    try{
+      var r=await fetch('/api/apps/'+ids[i],{method:'DELETE',headers:hdr()});
+      if(r.ok) ok++; else fail++;
+    }catch(e){ fail++; }
+  }
+  S.sel={}; refreshSelBtn();
+  if(fail) toast('删除 '+ok+' 个成功，'+fail+' 个失败','error');
+  else toast('已删除 '+ok+' 个应用','success');
+  await loadAll();
 }
 function refreshTable(){ fillTable(); }
 // 打开应用管理页（新窗口）+ 弹账号密码提示（可复制）
@@ -732,9 +774,10 @@ function toolbarHtml(){
       +'<select id="fD" onchange="S.fd=this.value;refreshTable()"><option value="">全部部署</option><option value="venv"'+(S.fd==='venv'?' selected':'')+'>venv</option><option value="docker"'+(S.fd==='docker'?' selected':'')+'>docker</option><option value="native"'+(S.fd==='native'?' selected':'')+'>native</option></select>'
       +'</div>';
   }
-  h+='<div style="display:flex;gap:8px;margin-left:auto"><button class="btn btn-ghost" onclick="exportApps()">⬇ 导出</button><button class="btn btn-primary" onclick="openApp()">＋ 新增应用</button></div></div>';
+  h+='<div style="display:flex;gap:8px;margin-left:auto"><button class="btn btn-ghost" onclick="exportApps()">⬇ 导出</button><button class="btn btn-red" id="delSelBtn" onclick="batchDelete()" style="display:'+(selCount()>0?'':'none')+'">删除 <span id="delSelCount">'+selCount()+'</span></button><button class="btn btn-primary" onclick="openApp()">＋ 新增应用</button></div></div>';
   return h;
 }
+function selCount(){ return Object.keys(S.sel||{}).length; }
 // 统一健康口径：结合进程状态 + 探活结果，只输出一个权威语义
 // 已停止 → 红色；运行中且探活正常 → 运行中·正常(绿)；运行中但探活异常 → 运行中(蓝)；未知 → 灰
 function healthText(status,h){
