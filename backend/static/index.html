@@ -791,11 +791,28 @@ function healthText(status,h){
 }
 
 /* ================= 操作 ================= */
-async function doAction(id,act){
+var ACT_MAP={start:'启动',stop:'停止',restart:'重启'};
+function doAction(id,act){
+  var a=S.apps.find(function(x){return x.id===id;}); var nm=a?a.name:('#'+id);
   S.acting[id]=act; render();
-  try{ await api('/api/apps/'+id+'/'+act); await loadAll(); }
-  catch(e){ toast('操作失败','error'); }
-  delete S.acting[id]; render();
+  try{
+    var xhr=new XMLHttpRequest();
+    xhr.open('POST','/api/apps/'+id+'/'+act,false);
+    xhr.setRequestHeader('Authorization','Bearer '+(S.token||localStorage.getItem('ap_token')||''));
+    xhr.setRequestHeader('Content-Type','application/json');
+    xhr.send();
+    var ok=false, detail='';
+    try{ var j=JSON.parse(xhr.responseText||'{}'); ok=j.ok; detail=j.detail||''; }catch(e){ ok=(xhr.status>=200&&xhr.status<300); }
+    if(ok){
+      toast((ACT_MAP[act]||act)+'「'+nm+'」成功','success');
+    }else{
+      toast((ACT_MAP[act]||act)+'「'+nm+'」失败：'+(detail||xhr.status),'error');
+    }
+  }catch(e){
+    toast('操作「'+nm+'」失败：'+e.message,'error');
+  }
+  delete S.acting[id];
+  loadAll();
 }
 async function toggleEnable(id){
   var a=S.apps.find(x=>x.id===id); if(!a) return;
