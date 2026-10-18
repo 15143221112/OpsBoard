@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/XH%20Panel-v1.0.0-blue?style=for-the-badge" alt="version" />
+  <img src="https://img.shields.io/badge/OpsBoard-v1.0.0-blue?style=for-the-badge" alt="version" />
   <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="python" />
   <img src="https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="fastapi" />
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="license" />
 </p>
 
-<h1 align="center">🖥️ XH Panel</h1>
+<h1 align="center">🖥️ OpsBoard</h1>
 
 <p align="center">A lightweight application management panel for self-hosted AI servers<br/>
 <strong>Real-time resource monitoring · One-click start/stop · Deployment docs · Auto-start · Mobile friendly</strong></p>
@@ -19,11 +19,11 @@
 
 ---
 
-## Why XH Panel?
+## Why OpsBoard?
 
 Running a bunch of AI services on a local/self-hosted server — `vLLM` inference, `whisper` transcription, `embedding`, `rerank`, `ComfyUI`, `WeKnora` knowledge base, `Prometheus` monitoring — each with its own port, deployment method (`venv`/`docker`/`native`), and startup command. It's a mess to manage.
 
-**XH Panel** collects every app into a beautiful visual panel: watch resource usage in real time, start/stop services with one click, browse deployment docs, and manage auto-start. Pure local, zero invasive dependencies, fully customizable.
+**OpsBoard** collects every app into a beautiful visual panel: watch resource usage in real time, start/stop services with one click, browse deployment docs, and manage auto-start. Pure local, zero invasive dependencies, fully customizable.
 
 ---
 

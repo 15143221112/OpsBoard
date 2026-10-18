@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/XH%20Panel-v1.0.0-blue?style=for-the-badge" alt="version" />
+  <img src="https://img.shields.io/badge/OpsBoard-v1.0.0-blue?style=for-the-badge" alt="version" />
   <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="python" />
   <img src="https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="fastapi" />
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="license" />
 </p>
 
-<h1 align="center">🖥️ XH Panel</h1>
+<h1 align="center">🖥️ OpsBoard</h1>
 
 <p align="center">面向自建 AI 服务器的轻量应用管理面板<br/>
 <strong>实时资源监控 · 一键启停 · 部署文档 · 开机自启 · 手机端适配</strong></p>
@@ -21,7 +21,7 @@
 
 ---
 
-## 为什么需要 XH Panel？
+## 为什么需要 OpsBoard？
 
 如果你在本地/自建服务器上跑着一堆 AI 服务——`vLLM` 推理、`whisper` 语音转写、`embedding`、`rerank`、`ComfyUI`、`WeKnora` 知识库、`Prometheus` 监控……你会发现：
 
@@ -30,7 +30,7 @@
 - 显存 / 内存到底谁占了多少，没有统一视图
 - 每个服务的部署文档散落在各处
 
-**XH Panel 就是干这个的**：把服务器上所有应用收进一个漂亮的可视化面板，实时看资源占用、一键启停、翻部署文档、管开机自启。纯本地、零依赖侵入、可二开。
+**OpsBoard 就是干这个的**：把服务器上所有应用收进一个漂亮的可视化面板，实时看资源占用、一键启停、翻部署文档、管开机自启。纯本地、零依赖侵入、可二开。
 
 ---
 
@@ -206,4 +206,4 @@ app-panel/
 
 ---
 
-*XH Panel 面向「自建 AI 服务器」场景，轻量、本地、可二开。有问题欢迎开 Issue。*
+*OpsBoard 面向「自建 AI 服务器」场景，轻量、本地、可二开。有问题欢迎开 Issue。*
