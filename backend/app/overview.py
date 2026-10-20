@@ -12,11 +12,13 @@ def overview(user: str = Depends(get_current_user)):
     gpu = system.gpu_total()
     mem = system.memory_total()
     cpu = system.cpu_total()
+    disk = system.disk_total()
     # 统计服务数
     return {
         "gpu": gpu,
         "memory": mem,
         "cpu": cpu,
+        "disk": disk,
         "server": {
             "hostname": _hostname(),
             "uptime": _uptime(),

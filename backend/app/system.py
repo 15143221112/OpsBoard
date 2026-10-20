@@ -118,6 +118,31 @@ def cpu_total():
     if dt <= 0:
         return {"util": 0}
     return {"util": round((1 - (idle1 - idle0) / dt) * 100, 1)}
+# ---------- 硬盘 ----------
+def disk_total():
+    """返回磁盘总容量/已用/可用(GB) 与使用率(%)，取根分区 df 输出"""
+    ok, out = _run("df -P /", timeout=8)
+    if not ok:
+        return {"total": 0, "used": 0, "free": 0, "pct": 0}
+    lines = out.splitlines()
+    # df -P 表头后第一行是目标分区；兼容 1K 块与后续行
+    for line in lines[1:]:
+        parts = line.split()
+        if len(parts) >= 5:
+            try:
+                total_kb = int(parts[1]); used_kb = int(parts[2]); free_kb = int(parts[3])
+                pct = int(parts[4].rstrip("%"))
+            except (ValueError, IndexError):
+                continue
+            return {
+                "total": round(total_kb / 1024 / 1024, 1),
+                "used": round(used_kb / 1024 / 1024, 1),
+                "free": round(free_kb / 1024 / 1024, 1),
+                "pct": pct,
+            }
+    return {"total": 0, "used": 0, "free": 0, "pct": 0}
+
+
 def _pid_of_service(unit_name: str):
     """获取 systemd 服务主 PID"""
     if unit_name.endswith(".service"):
