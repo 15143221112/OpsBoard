@@ -216,6 +216,21 @@ def _health_check(host_row, port):
 
 
 def app_status(host_row, app: dict) -> dict:
+    # 虚拟分组节点：不采集
+    if app.get("type") == "group":
+        return {
+            "id": app["id"], "name": app["name"], "type": "group",
+            "unit_name": app["unit_name"], "port": None,
+            "deploy_type": "group", "path": "", "web_url": "",
+            "web_user": "", "web_password": "",
+            "group_name": app.get("group_name", ""), "icon": app.get("icon", "📁"),
+            "remark": app.get("remark", ""), "sort": app.get("sort", 0),
+            "parent_id": app.get("parent_id"), "host_id": app.get("host_id"),
+            "status": "running", "listening": False,
+            "mem_mb": 0, "cpu_pct": "", "gpu_mib": 0,
+            "health": "ok", "enabled": "n/a",
+        }
+
     unit = app["unit_name"]
     is_docker = app["type"] == "docker"
 
