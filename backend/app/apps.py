@@ -10,19 +10,41 @@ from pydantic import BaseModel
 from .auth import get_current_user
 from .db import get_conn, log_operation
 from . import system
+from . import system_remote
 
 router = APIRouter(prefix="/api", tags=["apps"])
 
 
-def _all_apps():
+def _get_host_row(host_id: int | None):
+    """根据 host_id 拿主机配置；host_id=None 返回 None（表示本机）"""
+    if host_id is None:
+        return None
     conn = get_conn()
-    rows = conn.execute("SELECT * FROM apps ORDER BY sort, id").fetchall()
+    row = conn.execute("SELECT * FROM hosts WHERE id=?", (host_id,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"主机 id={host_id} 不存在")
+    return dict(row)
+
+
+def _collect_status(app: dict, host_row):
+    """统一入口：host_row=None 走本机，否则走 SSH 远程"""
+    if host_row is None:
+        return system.app_status(app)
+    return system_remote.app_status(host_row, app)
+
+
+def _all_apps(host_id: int | None = None):
+    conn = get_conn()
+    if host_id is None:
+        rows = conn.execute("SELECT * FROM apps WHERE host_id IS NULL ORDER BY sort, id").fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM apps WHERE host_id=? ORDER BY sort, id", (host_id,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
 def _running_first(apps):
-    """运行中在前，同状态保持原 sort 顺序（稳定排序）"""
     def key(a):
         st = a.get("status", "")
         if st == "running":
@@ -43,20 +65,20 @@ def _get_app(app_id: int):
 
 
 @router.get("/apps")
-def list_apps(user: str = Depends(get_current_user)):
-    apps = _all_apps()
-    # 并发采集状态，避免串行拖慢
+def list_apps(host_id: int | None = None, user: str = Depends(get_current_user)):
+    host_row = _get_host_row(host_id)
+    apps = _all_apps(host_id)
     with ThreadPoolExecutor(max_workers=8) as ex:
-        results = list(ex.map(system.app_status, apps))
+        results = list(ex.map(lambda a: _collect_status(a, host_row), apps))
     return _running_first(results)
 
 
 @router.get("/apps/export")
-def export_apps(user: str = Depends(get_current_user)):
-    """导出全部应用信息为 CSV（含账号密码、部署、资源占用）"""
-    apps = _all_apps()
+def export_apps(host_id: int | None = None, user: str = Depends(get_current_user)):
+    host_row = _get_host_row(host_id)
+    apps = _all_apps(host_id)
     with ThreadPoolExecutor(max_workers=8) as ex:
-        rows = list(ex.map(system.app_status, apps))
+        rows = list(ex.map(lambda a: _collect_status(a, host_row), apps))
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(["名称", "分组", "类型", "unit_name", "端口", "部署方式", "部署路径", "web地址",
@@ -66,7 +88,7 @@ def export_apps(user: str = Depends(get_current_user)):
                     a["deploy_type"], a["path"], a["web_url"],
                     a["web_user"], a["web_password"],
                     a["status"], "是" if a["listening"] else "否",
-                    a["gpu_mib"], a["mem_mb"], a["health"], a["enabled"], a["remark"]])
+                    a.get("gpu_mib", 0), a["mem_mb"], a["health"], a["enabled"], a["remark"]])
     buf.seek(0)
     return StreamingResponse(
         iter([buf.getvalue()]),
@@ -77,12 +99,16 @@ def export_apps(user: str = Depends(get_current_user)):
 
 @router.get("/apps/{app_id}/status")
 def single_status(app_id: int, user: str = Depends(get_current_user)):
-    return system.app_status(_get_app(app_id))
+    app = _get_app(app_id)
+    host_row = _get_host_row(app.get("host_id"))
+    return _collect_status(app, host_row)
 
 
 @router.post("/apps/{app_id}/start")
 def start_app(app_id: int, user: str = Depends(get_current_user)):
     app = _get_app(app_id)
+    if app.get("host_id"):
+        raise HTTPException(status_code=400, detail="远程主机的启停暂未开放（安全考虑），请直接登录目标主机操作")
     ok, out = system.app_action(app, "start")
     log_operation(user, "start", app["name"], out[-200:] if out else "")
     return {"ok": ok, "detail": out[-300:] if out else ""}
@@ -91,6 +117,8 @@ def start_app(app_id: int, user: str = Depends(get_current_user)):
 @router.post("/apps/{app_id}/stop")
 def stop_app(app_id: int, user: str = Depends(get_current_user)):
     app = _get_app(app_id)
+    if app.get("host_id"):
+        raise HTTPException(status_code=400, detail="远程主机的启停暂未开放（安全考虑），请直接登录目标主机操作")
     ok, out = system.app_action(app, "stop")
     log_operation(user, "stop", app["name"], out[-200:] if out else "")
     return {"ok": ok, "detail": out[-300:] if out else ""}
@@ -99,6 +127,8 @@ def stop_app(app_id: int, user: str = Depends(get_current_user)):
 @router.post("/apps/{app_id}/restart")
 def restart_app(app_id: int, user: str = Depends(get_current_user)):
     app = _get_app(app_id)
+    if app.get("host_id"):
+        raise HTTPException(status_code=400, detail="远程主机的启停暂未开放（安全考虑），请直接登录目标主机操作")
     ok, out = system.app_action(app, "restart")
     log_operation(user, "restart", app["name"], out[-200:] if out else "")
     return {"ok": ok, "detail": out[-300:] if out else ""}
@@ -107,6 +137,8 @@ def restart_app(app_id: int, user: str = Depends(get_current_user)):
 @router.post("/apps/{app_id}/enable")
 def enable_app(app_id: int, user: str = Depends(get_current_user)):
     app = _get_app(app_id)
+    if app.get("host_id"):
+        raise HTTPException(status_code=400, detail="远程主机不支持开机自启开关")
     ok, out = system.app_enable(app, True)
     log_operation(user, "enable", app["name"], out[-200:] if out else "")
     return {"ok": ok, "detail": out[-300:] if out else ""}
@@ -115,12 +147,14 @@ def enable_app(app_id: int, user: str = Depends(get_current_user)):
 @router.post("/apps/{app_id}/disable")
 def disable_app(app_id: int, user: str = Depends(get_current_user)):
     app = _get_app(app_id)
+    if app.get("host_id"):
+        raise HTTPException(status_code=400, detail="远程主机不支持开机自启开关")
     ok, out = system.app_enable(app, False)
     log_operation(user, "disable", app["name"], out[-200:] if out else "")
     return {"ok": ok, "detail": out[-300:] if out else ""}
 
 
-# ---------- 应用增删改（P1，先预留） ----------
+# ---------- 应用增删改 ----------
 class AppIn(BaseModel):
     name: str
     type: str = "systemd"
@@ -136,6 +170,7 @@ class AppIn(BaseModel):
     web_user: str = ""
     web_password: str = ""
     parent_id: int | None = None
+    host_id: int | None = None
 
 
 @router.post("/apps")
@@ -143,11 +178,11 @@ def add_app(data: AppIn, user: str = Depends(get_current_user)):
     conn = get_conn()
     try:
         cur = conn.execute("""
-            INSERT INTO apps (name,type,unit_name,port,deploy_type,path,web_url,group_name,icon,remark,sort,web_user,web_password,parent_id)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            INSERT INTO apps (name,type,unit_name,port,deploy_type,path,web_url,group_name,icon,remark,sort,web_user,web_password,parent_id,host_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (data.name, data.type, data.unit_name, data.port, data.deploy_type,
               data.path, data.web_url, data.group_name, data.icon, data.remark, data.sort,
-              data.web_user, data.web_password, data.parent_id))
+              data.web_user, data.web_password, data.parent_id, data.host_id))
         conn.commit()
         new_id = cur.lastrowid
     except Exception as e:
@@ -176,11 +211,11 @@ def update_app(app_id: int, data: AppIn, user: str = Depends(get_current_user)):
     try:
         conn.execute("""
             UPDATE apps SET name=?, type=?, unit_name=?, port=?, deploy_type=?, path=?,
-                web_url=?, group_name=?, icon=?, remark=?, sort=?, web_user=?, web_password=?, parent_id=?
+                web_url=?, group_name=?, icon=?, remark=?, sort=?, web_user=?, web_password=?, parent_id=?, host_id=?
             WHERE id=?
         """, (data.name, data.type, data.unit_name, data.port, data.deploy_type,
               data.path, data.web_url, data.group_name, data.icon, data.remark, data.sort,
-              data.web_user, data.web_password, data.parent_id, app_id))
+              data.web_user, data.web_password, data.parent_id, data.host_id, app_id))
         conn.commit()
     except Exception as e:
         conn.close()

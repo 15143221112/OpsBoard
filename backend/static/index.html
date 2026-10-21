@@ -361,7 +361,10 @@ var S = {
   editingId:null, acting:{},
   pollTimer:null, es:null, following:false, logId:null,
   expanded:{}, // 展开的主服务 id 集合
-  sel:{} // 勾选待删除的应用 id 集合
+  sel:{}, // 勾选待删除的应用 id 集合
+  tabs: [],            // 顶栏 tab 列表（来自 /api/tabs）
+  currentTabId: null,  // 当前选中 tab id
+  currentHostId: null  // 当前 tab 对应的 host_id（null=本机）
 };
 
 /* ================= 工具 ================= */
@@ -481,15 +484,41 @@ async function loadAll(showBar){
   var t0=Date.now();
   if(showBar) showLoading();
   try{
-    var ov=await api('/api/overview');
-    var aps=await api('/api/apps');
-    S.gpu=ov.gpu; S.mem=ov.memory; S.cpu=ov.cpu||{}; S.disk=ov.disk||{}; S.apps=aps;
+    // 先加载 tabs（只拉一次）
+    if(!S.tabs.length){
+      S.tabs = await api('/api/tabs');
+      if(S.tabs.length){
+        // 默认选中第一个 tab（本机优先）
+        if(S.currentTabId==null){
+          var local = S.tabs.find(t=>t.host_id==null) || S.tabs[0];
+          S.currentTabId = local.id;
+          S.currentHostId = local.host_id;
+        }
+      }
+    }
+    var q = S.currentHostId==null ? '' : '?host_id='+S.currentHostId;
+    var ov=await api('/api/overview'+q);
+    var aps=await api('/api/apps'+q);
+    S.gpu=ov.gpu; S.mem=ov.memory; S.cpu=ov.cpu||{}; S.disk=ov.disk||{};
+    S.isRemote = ov.is_remote || false;
+    S.apps=aps;
     S.lastUpdate=new Date().toLocaleTimeString('zh-CN');
     // 首次加载至少让进度条可见 0.6s，避免内网太快一闪而过
     if(showBar){ var el=Date.now()-t0; if(el<600) await new Promise(function(r){setTimeout(r,600-el);}); }
     hideLoading();
     render();
   }catch(e){ hideLoading(); }
+}
+
+/* 切换顶栏 tab */
+async function setTab(tabId){
+  if(S.currentTabId===tabId) return;
+  var t = S.tabs.find(x=>x.id===tabId);
+  if(!t) return;
+  S.currentTabId = tabId;
+  S.currentHostId = t.host_id;
+  S.group='全部'; S.kw=''; S.fg=''; S.fs=''; S.fd='';
+  await loadAll(true);
 }
 function hideLoading(){ var l=$('loading'); if(l) l.classList.add('hide'); }
 async function loadOps(){
@@ -517,6 +546,20 @@ document.addEventListener('click', function(e){
   if(!chip && e.target.id!=='userMenu') closeUserMenu();
 });
 
+function renderTabBar(){
+  if(!S.tabs.length) return '';
+  var btns = S.tabs.map(function(t){
+    var active = S.currentTabId===t.id;
+    var label = (t.icon||'🖥️')+' '+esc(t.name);
+    if(t.host_ip) label += ' <span style="opacity:.6;font-size:11px">· '+t.host_ip+'</span>';
+    return '<button class="btn '+(active?'btn-primary':'btn-ghost')+'" style="border-radius:20px" onclick="setTab('+t.id+')">'+label+'</button>';
+  }).join('');
+  return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px 0;align-items:center;">'
+    + '<span style="color:var(--muted);font-size:12px;margin-right:4px;">🖥️ 主机</span>'
+    + btns
+    + '</div>';
+}
+
 function renderApps(){
   var ov=renderOverview();
 
@@ -524,9 +567,14 @@ function renderApps(){
     +'<div class="vtoggle"><button id="vmCard" class="'+(S.viewMode==='card'?'active':'')+'" onclick="setMode(\'card\')">▦ 卡片</button><button id="vmTable" class="'+(S.viewMode==='table'?'active':'')+'" onclick="setMode(\'table\')">☰ 列表</button></div>';
   toolbar+='<button class="btn btn-primary" style="margin-left:auto" onclick="openApp()">＋ 新增应用</button></div>';
 
-  if(S.viewMode==='table'){ renderTable(); return; }
-  // 卡片模式：overview + 工具栏 + 卡片
-  $('main').innerHTML = ov + toolbar + renderCards();
+  if(S.viewMode==='table'){
+    $('main').innerHTML = renderTabBar() + ov + toolbarHtml()
+      + '<div class="tablewrap"><table class="tbl"><thead id="tHead">'+theadHtml()+'</thead><tbody id="tBody"></tbody></table></div>';
+    fillTable();
+    return;
+  }
+  // 卡片模式：tab栏 + overview + 工具栏 + 卡片
+  $('main').innerHTML = renderTabBar() + ov + toolbar + renderCards();
 }
 
 function setMode(m){ S.viewMode=m; render(); }

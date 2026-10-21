@@ -4,7 +4,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
-from . import auth, apps, logs, overview, trend, docs
+from . import auth, apps, logs, overview, trend, docs, tabs
 from .db import init_db
 
 init_db()
@@ -18,6 +18,7 @@ app.include_router(docs.router)
 app.include_router(logs.router)
 app.include_router(overview.router)
 app.include_router(trend.router)
+app.include_router(tabs.router)
 
 
 @app.get("/api/health")

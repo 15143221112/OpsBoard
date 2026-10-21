@@ -26,6 +26,13 @@ def get_conn():
     return conn
 
 
+def _ensure_column(cur, table: str, col: str, ddl: str):
+    """幂等加列：已存在则跳过"""
+    cols = {r[1] for r in cur.execute(f"PRAGMA table_info({table})").fetchall()}
+    if col not in cols:
+        cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
+
+
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
@@ -36,6 +43,34 @@ def init_db():
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             role TEXT DEFAULT 'admin',
+            created_at TEXT DEFAULT (datetime('now','localtime'))
+        )
+    """)
+    # 远程主机表（host_id=NULL 表示面板所在本机，不入库）
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS hosts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            ip TEXT NOT NULL,
+            ssh_port INTEGER DEFAULT 22,
+            ssh_user TEXT DEFAULT 'ubuntu',
+            ssh_password TEXT DEFAULT '',
+            remark TEXT DEFAULT '',
+            sort INTEGER DEFAULT 0,
+            enabled INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now','localtime'))
+        )
+    """)
+    # 顶栏 tab 表（通用，可增删改）
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS tabs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            icon TEXT DEFAULT '🖥️',
+            host_id INTEGER,                -- NULL=本机tab；整数=对应 hosts.id
+            sort INTEGER DEFAULT 0,
+            remark TEXT DEFAULT '',
+            enabled INTEGER DEFAULT 1,
             created_at TEXT DEFAULT (datetime('now','localtime'))
         )
     """)
@@ -56,7 +91,9 @@ def init_db():
             remark TEXT DEFAULT '',
             sort INTEGER DEFAULT 0,
             web_user TEXT DEFAULT '',
-            web_password TEXT DEFAULT ''
+            web_password TEXT DEFAULT '',
+            host_id INTEGER DEFAULT NULL,            -- NULL=本机；整数=远程主机
+            parent_id INTEGER DEFAULT NULL
         )
     """)
     # 操作日志表
@@ -83,30 +120,29 @@ def init_db():
         )
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_trend_ts ON trend(ts)")
-    # 应用部署文档表（上传到 minio，桶 document）
+    # 应用部署文档表
     cur.execute("""
         CREATE TABLE IF NOT EXISTS app_docs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             app_id INTEGER NOT NULL,
             filename TEXT NOT NULL,
-            key TEXT NOT NULL,          -- minio 对象 key
+            key TEXT NOT NULL,
             url TEXT DEFAULT '',
             size INTEGER DEFAULT 0,
             created_at TEXT DEFAULT (datetime('now','localtime'))
         )
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_app_docs_app ON app_docs(app_id)")
-    # 迁移：为已有库补充 web_user / web_password 列
-    cols = {r[1] for r in cur.execute("PRAGMA table_info(apps)").fetchall()}
-    if "web_user" not in cols:
-        cur.execute("ALTER TABLE apps ADD COLUMN web_user TEXT DEFAULT ''")
-    if "web_password" not in cols:
-        cur.execute("ALTER TABLE apps ADD COLUMN web_password TEXT DEFAULT ''")
-    if "parent_id" not in cols:
-        cur.execute("ALTER TABLE apps ADD COLUMN parent_id INTEGER DEFAULT NULL")
+
+    # 幂等迁移：老库补列
+    _ensure_column(cur, "apps", "web_user", "TEXT DEFAULT ''")
+    _ensure_column(cur, "apps", "web_password", "TEXT DEFAULT ''")
+    _ensure_column(cur, "apps", "parent_id", "INTEGER DEFAULT NULL")
+    _ensure_column(cur, "apps", "host_id", "INTEGER DEFAULT NULL")
+
     conn.commit()
 
-    # 默认管理员：admin / 123456（仅首次初始化，生产请通过环境变量指定并尽快修改）
+    # 默认管理员
     DEFAULT_ADMIN = os.environ.get("APP_PANEL_ADMIN_USER", "admin")
     DEFAULT_PWD = os.environ.get("APP_PANEL_ADMIN_PASSWORD", "admin123")
     cur.execute("SELECT id FROM users WHERE username=?", (DEFAULT_ADMIN,))
@@ -117,18 +153,27 @@ def init_db():
         )
         conn.commit()
 
-    # 预填应用清单（若为空）
+    # 预填应用清单（若 apps 为空）
     cur.execute("SELECT COUNT(*) FROM apps")
     if cur.fetchone()[0] == 0:
         _seed_apps(cur)
         conn.commit()
+
+    # 预填默认 tab（若 tabs 为空）
+    cur.execute("SELECT COUNT(*) FROM tabs")
+    if cur.fetchone()[0] == 0:
+        cur.execute("""
+            INSERT INTO tabs (name, icon, host_id, sort, remark)
+            VALUES ('本机服务', '💻', NULL, 0, '面板所在主机')
+        """)
+        conn.commit()
+
     conn.close()
 
 
 def _seed_apps(cur):
-    """预填台账数据"""
+    """预填台账数据（全是本机服务）"""
     apps = [
-        # name, type, unit_name, port, deploy_type, path, web_url, group, icon, remark
         ("rerank", "systemd", "rerank.service", 8001, "venv", "/opt/vllm-venv-new",
          "http://127.0.0.1:8001/v1", "AI", "🔍", "bge-reranker-v2-m3"),
         ("vl-8b", "systemd", "vl-8b.service", 8002, "venv", "/opt/vllm-venv-new",
