@@ -482,6 +482,8 @@ async function initPanel(){
 
 async function loadAll(showBar){
   var t0=Date.now();
+  // 关键：记录本次请求发起时的 host_id，返回时如果用户已经切到别的 tab，丢弃结果（防竞态）
+  var reqHostId = S.currentHostId;
   if(showBar) showLoading();
   try{
     // 先加载 tabs（只拉一次）
@@ -493,12 +495,16 @@ async function loadAll(showBar){
           var local = S.tabs.find(t=>t.host_id==null) || S.tabs[0];
           S.currentTabId = local.id;
           S.currentHostId = local.host_id;
+          reqHostId = S.currentHostId;
         }
       }
     }
     var q = S.currentHostId==null ? '' : '?host_id='+S.currentHostId;
     var ov=await api('/api/overview'+q);
+    // 请求期间用户切 tab 了，丢弃
+    if(S.currentHostId !== reqHostId){ hideLoading(); return; }
     var aps=await api('/api/apps'+q);
+    if(S.currentHostId !== reqHostId){ hideLoading(); return; }
     S.gpu=ov.gpu; S.mem=ov.memory; S.cpu=ov.cpu||{}; S.disk=ov.disk||{};
     S.isRemote = ov.is_remote || false;
     S.apps=aps;
