@@ -1006,6 +1006,9 @@ function openApp(id){
   $('fIcon').value=a?a.icon:'📦';
   $('fRemark').value=a?a.remark||'':'';
   $('fSort').value=a&&a.sort!=null?a.sort:0;
+  // 关键：记住 parent_id / host_id，保存时不能丢（否则远程应用一编辑就跑回本机 tab）
+  S.editingParentId = a?a.parent_id:null;
+  S.editingHostId = a?a.host_id:(S.currentHostId||null);
   $('modalApp').style.display='flex';
 }
 async function submitApp(){
@@ -1013,7 +1016,8 @@ async function submitApp(){
     port:$('fPort').value?Number($('fPort').value):null, deploy_type:$('fDeploy').value,
     path:$('fPath').value.trim(), web_url:$('fWeb').value.trim(), group_name:$('fGroup').value.trim()||'其他',
     icon:$('fIcon').value.trim()||'📦', remark:$('fRemark').value.trim(), sort:Number($('fSort').value||0),
-    web_user:$('fWebUser').value.trim(), web_password:$('fWebPass').value};
+    web_user:$('fWebUser').value.trim(), web_password:$('fWebPass').value,
+    parent_id:S.editingParentId, host_id:S.editingHostId};
   if(!payload.name||!payload.unit_name){ toast('名称和Unit/容器名必填','warn'); return; }
   $('saveBtn').disabled=true;
   var method=S.editingId?'PUT':'POST';
