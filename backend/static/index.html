@@ -689,7 +689,7 @@ function fillTable(){
   var kidsCount={}; rows.forEach(function(a){ if(a.parent_id!=null){ kidsCount[a.parent_id]=(kidsCount[a.parent_id]||0)+1; } });
   var trs=rows.map(function(a){
     var dot=a.status==='running'?'run':(a.status==='stopped'?'stop':'warn');
-    var isMain=a.parent_id==null, isKid=a.parent_id!=null;
+    var isMain=a.parent_id==null, isKid=a.parent_id!=null, isDyn=a.dynamic===true;
     // 子服务：父未展开则跳过
     if(isKid && !S.expanded[a.parent_id]) return '';
     var indent=isKid?' style="padding-left:34px;color:var(--muted)"':'';
@@ -705,18 +705,21 @@ function fillTable(){
     else etag='<span class="etag na" title="'+esc(a.enabled||'')+'">?</span>';
     // 操作列：启停/重启/日志（图标圆角按钮，点击不触发行编辑）
     var acts='';
-    if(a.status!=='running') acts+='<button class="obtn obtn-start" title="启动" '+(S.acting[a.id]==='start'?'disabled':'')+' onclick="event.stopPropagation();doAction('+a.id+',\'start\')">▶</button>';
-    else acts+='<button class="obtn obtn-stop" title="停止" '+(S.acting[a.id]==='stop'?'disabled':'')+' onclick="event.stopPropagation();doAction('+a.id+',\'stop\')">■</button>';
-    if(a.status==='running') acts+='<button class="obtn obtn-restart" title="重启" '+(S.acting[a.id]==='restart'?'disabled':'')+' onclick="event.stopPropagation();doAction('+a.id+',\'restart\')">⟳</button>';
-    acts+='<button class="obtn obtn-log" title="查看日志" onclick="event.stopPropagation();openLog('+a.id+')">📜</button>';
+    if(!isDyn){
+      if(a.status!=='running') acts+='<button class="obtn obtn-start" title="启动" '+(S.acting[a.id]==='start'?'disabled':'')+' onclick="event.stopPropagation();doAction('+a.id+',\'start\')">▶</button>';
+      else acts+='<button class="obtn obtn-stop" title="停止" '+(S.acting[a.id]==='stop'?'disabled':'')+' onclick="event.stopPropagation();doAction('+a.id+',\'stop\')">■</button>';
+      if(a.status==='running') acts+='<button class="obtn obtn-restart" title="重启" '+(S.acting[a.id]==='restart'?'disabled':'')+' onclick="event.stopPropagation();doAction('+a.id+',\'restart\')">⟳</button>';
+      acts+='<button class="obtn obtn-log" title="查看日志" onclick="event.stopPropagation();openLog('+a.id+')">📜</button>';
+    }
     var ht=healthText(a.status,a.health);
     // 名称：有管理页则可点击打开（新窗口）
     var nameHtml = a.web_url
       ? '<a href="javascript:void(0)" class="app-name" onclick="event.stopPropagation();openWeb('+a.id+')" title="点击打开管理页">'+(a.icon||'')+' '+esc(a.name)+'</a>'
       : '<span>'+(a.icon||'')+' '+esc(a.name)+'</span>';
     var gcls=isKid?' class="app-row kid-row"':' class="app-row"';
-    return '<tr'+gcls+' onclick="openApp('+a.id+')" title="点击编辑">'
-      +'<td style="text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="selrow" '+(S.sel[a.id]?'checked':'')+' onclick="toggleSel('+a.id+',this.checked)"></td>'
+    var rowAct = isDyn ? ' title="Ollama 已加载模型（只读）"' : ' onclick="openApp('+a.id+')" title="点击编辑"';
+    return '<tr'+gcls+rowAct+'>'
+      +'<td style="text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="selrow" '+(isDyn?'disabled':'')+' '+(S.sel[a.id]?'checked':'')+' onclick="toggleSel('+a.id+',this.checked)"></td>'
       +'<td style="white-space:nowrap">'+acts+'</td>'
       +'<td style="font-weight:600"'+indent+'>'+tog+nameHtml+'</td><td>'+esc(a.group_name)+'</td>'
       +'<td><span class="dot '+dot+'"></span>'+statusText(a)+'</td><td>'+(a.port||'—')+'</td>'
@@ -745,14 +748,14 @@ function toggleSel(id,chk){
 }
 function toggleAll(chk){
   var rows=sortedApps();
-  if(chk){ rows.forEach(function(a){ S.sel[a.id]=1; }); }
+  if(chk){ rows.forEach(function(a){ if(!a.dynamic) S.sel[a.id]=1; }); }
   else { S.sel={}; }
   refreshSelBtn();
 }
 function rowsAllChecked(){
   var rows=sortedApps();
   if(!rows.length) return false;
-  return rows.every(function(a){ return !!S.sel[a.id]; });
+  return rows.every(function(a){ return a.dynamic || !!S.sel[a.id]; });
 }
 function refreshSelBtn(){
   var n=selCount();

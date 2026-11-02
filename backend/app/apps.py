@@ -1,6 +1,8 @@
 """应用列表、状态、启停、增删改、导出"""
 import csv
 import io
+import json
+import re
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -55,6 +57,97 @@ def _running_first(apps):
     return sorted(apps, key=key)
 
 
+def _size_to_mb(size):
+    """把 ollama ps 的 SIZE 字符串('17 GB'/'850 MB')转成 MB；数字(字节)也兼容"""
+    if size is None:
+        return 0
+    if isinstance(size, (int, float)):
+        return int(size / 1024 / 1024)
+    try:
+        s = str(size).strip()
+        num = float(s.split()[0])
+        low = s.lower()
+        if "tb" in low:
+            return int(num * 1024 * 1024)
+        if "gb" in low or "gib" in low:
+            return int(num * 1024)
+        if "mb" in low or "mib" in low:
+            return int(num)
+        if "kb" in low or "kib" in low:
+            return int(num / 1024)
+        return int(num * 1024)  # 裸数字默认按 GB
+    except Exception:
+        return 0
+
+
+def _parse_ollama_ps(text):
+    """解析 `ollama ps` 表格输出（老版本不支持 --format json）。
+    行格式: NAME ID SIZE PROCESSOR CONTEXT RUNNER UNTIL
+    NAME 无空格，SIZE 形如 '7.9 GB'，PROCESSOR 形如 '100% GPU' 或 '72%/28% CPU/GPU'。
+    """
+    models = []
+    for line in text.splitlines()[1:]:
+        if not line.strip():
+            continue
+        m = re.match(r"^(\S+)\s+([0-9a-f]{10,})\s+([\d.]+)\s*([GMK]B)\s+(.*)$", line)
+        if not m:
+            continue
+        name, mid, num, unit, rest = m.groups()
+        # rest = "PROCESSOR CONTEXT RUNNER UNTIL..."；CONTEXT 是第一个纯数字 token
+        proc_parts, rest_tokens = [], rest.split()
+        for t in rest_tokens:
+            if t.isdigit():
+                break
+            proc_parts.append(t)
+        processor = " ".join(proc_parts) if proc_parts else ""
+        models.append({"name": name, "size": f"{num} {unit}", "processor": processor})
+    return models
+
+
+def _attach_dyn_children(results, host_row):
+    """对 ollama 应用，把当前加载的模型作为动态只读子项附加（parent_id=ollama.id）。
+
+    模型是运行时的，不写库；每次列表实时跑 `ollama ps` 拿当前加载的模型。
+    """
+    out = list(results)
+    ollama = next((a for a in out if "ollama" in (a.get("name") or "").lower()), None)
+    if ollama is None:
+        return out
+    if host_row is None:
+        ok, txt = system._run("ollama ps", timeout=6)
+    else:
+        ok, txt = system_remote.run(host_row, "ollama ps", timeout=6)
+    if not ok or not txt:
+        return out
+    for m in _parse_ollama_ps(txt):
+        name = m["name"]
+        proc = m["processor"]
+        gpu_mb = _size_to_mb(m["size"])
+        out.append({
+            "id": "dyn-ollama-" + str(name),
+            "name": str(name),
+            "type": "model",
+            "unit_name": str(name),
+            "port": None,
+            "deploy_type": "model",
+            "path": "", "web_url": "", "web_user": "", "web_password": "",
+            "group_name": ollama.get("group_name", ""),
+            "icon": "🧠",
+            "remark": ("处理器: " + str(proc)) if proc else "Ollama 已加载模型",
+            "sort": 0,
+            "parent_id": ollama["id"],
+            "host_id": ollama.get("host_id"),
+            "status": "running",
+            "listening": False,
+            "mem_mb": 0,
+            "gpu_mib": gpu_mb,
+            "health": "ok",
+            "enabled": "n/a",
+            "dynamic": True,
+        })
+    return out
+
+
 def _get_app(app_id: int):
     conn = get_conn()
     row = conn.execute("SELECT * FROM apps WHERE id=?", (app_id,)).fetchone()
@@ -70,7 +163,7 @@ def list_apps(host_id: int | None = None, user: str = Depends(get_current_user))
     apps = _all_apps(host_id)
     with ThreadPoolExecutor(max_workers=8) as ex:
         results = list(ex.map(lambda a: _collect_status(a, host_row), apps))
-    return _running_first(results)
+    return _attach_dyn_children(_running_first(results), host_row)
 
 
 @router.get("/apps/export")
