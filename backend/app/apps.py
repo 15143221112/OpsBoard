@@ -122,7 +122,11 @@ def _attach_dyn_children(results, host_row):
     for m in _parse_ollama_ps(txt):
         name = m["name"]
         proc = m["processor"]
-        gpu_mb = _size_to_mb(m["size"])
+        # 显存列以实际 GPU 占用为准：SIZE 是模型大小不是显存。
+        # 仅当 PROCESSOR 为 100% GPU 才近似显示 SIZE；CPU/混合(如 qwen-embed 走内存)显示 0(面板显示 —)。
+        mg = re.search(r"(\d+)%\s*GPU", proc)
+        gpu_pct = int(mg.group(1)) if mg else 0
+        gpu_mb = _size_to_mb(m["size"]) if gpu_pct >= 100 else 0
         out.append({
             "id": "dyn-ollama-" + str(name),
             "name": str(name),
