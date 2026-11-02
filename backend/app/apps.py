@@ -131,20 +131,35 @@ def _ollama_proc_runtime(host_row):
 
 
 def _ollama_cpu_pct(host_row):
-    """ollama 及 llama-server 进程 %cpu 之和（多进程/多核可 >100）"""
+    """ollama 及 llama-server 进程 CPU 占用，按宿主机总核数归一化为使用率(0-100%)。
+
+    进程 %cpu 是相对单核的（多核可超100%），通用监控口径是相对总核数的使用率，
+    故除 nproc 后再返回，避免显示 2000%+ 这类不直观值。
+    """
     if host_row is None:
         run = system._run
     else:
         run = lambda c, timeout=8: system_remote.run(host_row, c, timeout=timeout)
-    ok, out = run("ps -eo %cpu,cmd 2>/dev/null | grep -E 'ollama|llama-server' | grep -v grep")
+    ok, out = run("ps -eo %cpu,cmd 2>/dev/null | grep -E 'ollama|llama-server' | grep -v grep; echo NPROC=$(nproc)")
     if not ok:
         return None
     total = 0.0
+    ncpu = 0
     for line in out.splitlines():
+        if line.startswith("NPROC="):
+            v = line.split("=", 1)[1].strip()
+            if v.isdigit():
+                ncpu = int(v)
+            continue
         p = line.split(None, 1)
         if p and p[0].replace(".", "", 1).isdigit():
             total += float(p[0])
-    return round(total, 1) if total else None
+    if not total:
+        return None
+    if ncpu:
+        # total 已是相对单核的百分比；相对总核使用率 = total/ncpu
+        return round(total / ncpu, 1)
+    return round(total, 1)
 
 
 def _attach_dyn_children(results, host_row):
