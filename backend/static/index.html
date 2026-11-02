@@ -680,7 +680,7 @@ function renderTable(){
 function theadHtml(){
   var arrow=function(k){ return S.sortKey===k?(S.sortDir>0?'▲':'▼'):''; };
   var allChecked=rowsAllChecked();
-  return '<tr><th style="width:32px"><input type="checkbox" class="selall" '+(allChecked?'checked':'')+' onclick="toggleAll(this.checked)" title="全选"></th><th>操作</th><th onclick="setSort(\'name\')">名称 '+arrow('name')+'</th><th onclick="setSort(\'group_name\')">分组 '+arrow('group_name')+'</th><th onclick="setSort(\'status\')">状态 '+arrow('status')+'</th><th onclick="setSort(\'port\')">端口 '+arrow('port')+'</th><th>监听</th><th onclick="setSort(\'deploy_type\')">部署 '+arrow('deploy_type')+'</th><th onclick="setSort(\'gpu_mib\')">显存 '+arrow('gpu_mib')+'</th><th onclick="setSort(\'mem_mb\')">内存 '+arrow('mem_mb')+'</th><th onclick="setSort(\'health\')">健康 '+arrow('health')+'</th><th>自启</th><th>账号</th><th>密码</th><th>部署路径</th><th>文档</th></tr>';
+  return '<tr><th style="width:32px"><input type="checkbox" class="selall" '+(allChecked?'checked':'')+' onclick="toggleAll(this.checked)" title="全选"></th><th>操作</th><th onclick="setSort(\'name\')">名称 '+arrow('name')+'</th><th onclick="setSort(\'group_name\')">分组 '+arrow('group_name')+'</th><th onclick="setSort(\'status\')">状态 '+arrow('status')+'</th><th onclick="setSort(\'port\')">端口 '+arrow('port')+'</th><th>监听</th><th onclick="setSort(\'deploy_type\')">部署 '+arrow('deploy_type')+'</th><th onclick="setSort(\'gpu_mib\')">显存 '+arrow('gpu_mib')+'</th><th onclick="setSort(\'mem_mb\')">内存 '+arrow('mem_mb')+'</th><th onclick="setSort(\'cpu_pct\')">CPU '+arrow('cpu_pct')+'</th><th onclick="setSort(\'health\')">健康 '+arrow('health')+'</th><th>自启</th><th>账号</th><th>密码</th><th>部署路径</th><th>文档</th></tr>';
 }
 // 仅刷新表格体 + 表头排序箭头，不重建工具栏（避免输入框失焦）
 function fillTable(){
@@ -725,7 +725,7 @@ function fillTable(){
       +'<td><span class="dot '+dot+'"></span>'+statusText(a)+'</td><td>'+(a.port||'—')+'</td>'
       +'<td style="color:'+(a.listening?'var(--ok)':'var(--muted)')+'">'+(a.listening?'是':'否')+'</td>'
       +'<td><span class="badge badge-'+a.deploy_type+'">'+a.deploy_type+'</span></td>'
-      +'<td>'+(a.gpu_mib>0?a.gpu_mib:'—')+'</td><td>'+(a.mem_mb>0?fmtMB(a.mem_mb):'—')+'</td>'
+      +'<td>'+(a.gpu_mib>0?a.gpu_mib:'—')+'</td><td>'+(a.mem_mb>0?fmtMB(a.mem_mb):'—')+'</td>'+'<td>'+(a.cpu_pct>0?a.cpu_pct+'%':'—')+'</td>'
       +'<td style="color:'+ht.c+'">'+ht.t+'</td>'
       +'<td>'+etag+'</td>'
       +'<td class="copy-cell">'+(a.web_user?'<span title="点击复制账号" onclick="event.stopPropagation();copyText(\''+esc(a.web_user)+'\')">'+esc(a.web_user)+'</span>':'—')+'</td>'

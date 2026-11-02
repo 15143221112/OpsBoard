@@ -130,6 +130,23 @@ def _ollama_proc_runtime(host_row):
     return proc_mem, proc_vram
 
 
+def _ollama_cpu_pct(host_row):
+    """ollama 及 llama-server 进程 %cpu 之和（多进程/多核可 >100）"""
+    if host_row is None:
+        run = system._run
+    else:
+        run = lambda c, timeout=8: system_remote.run(host_row, c, timeout=timeout)
+    ok, out = run("ps -eo %cpu,cmd 2>/dev/null | grep -E 'ollama|llama-server' | grep -v grep")
+    if not ok:
+        return None
+    total = 0.0
+    for line in out.splitlines():
+        p = line.split(None, 1)
+        if p and p[0].replace(".", "", 1).isdigit():
+            total += float(p[0])
+    return round(total, 1) if total else None
+
+
 def _attach_dyn_children(results, host_row):
     """对 ollama 应用，把当前加载的模型作为动态只读子项附加（parent_id=ollama.id）。
 
@@ -191,6 +208,14 @@ def _attach_dyn_children(results, host_row):
             "enabled": "n/a",
             "dynamic": True,
         })
+    # 父节点(ollama)汇总子模型：总显存、总内存、总 CPU
+    dyn = [x for x in out if x.get("dynamic") and x.get("parent_id") == ollama["id"]]
+    if dyn:
+        ollama["mem_mb"] = sum(x.get("mem_mb", 0) for x in dyn)
+        ollama["gpu_mib"] = sum(x.get("gpu_mib", 0) for x in dyn)
+        cpu = _ollama_cpu_pct(host_row)
+        if cpu is not None:
+            ollama["cpu_pct"] = cpu
     return out
 
 
