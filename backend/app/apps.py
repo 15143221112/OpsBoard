@@ -104,10 +104,37 @@ def _parse_ollama_ps(text):
     return models
 
 
+def _ollama_proc_runtime(host_row):
+    """返回 ({pid: rss_mb}, {pid: vram_mib})：llama-server 进程的内存 RSS 与 nvidia-smi 实际显存。
+
+    SIZE 是模型大小不是显存，显存必须以 nvidia-smi 实测为准；CPU 模型(如 qwen-embed 走内存)不在 GPU 上，显存为 0。
+    """
+    if host_row is None:
+        run = system._run
+    else:
+        run = lambda c, timeout=8: system_remote.run(host_row, c, timeout=timeout)
+    proc_mem = {}
+    ok, out = run("ps -eo pid,rss,cmd 2>/dev/null | grep llama-server | grep -v grep")
+    if ok:
+        for line in out.splitlines():
+            p = line.split(None, 3)
+            if len(p) >= 3 and p[0].isdigit():
+                proc_mem[int(p[0])] = int(p[1]) // 1024  # rss 单位 KB → MB
+    proc_vram = {}
+    ok2, out2 = run("nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader,nounits 2>/dev/null")
+    if ok2:
+        for line in out2.splitlines():
+            parts = [x.strip() for x in line.split(",")]
+            if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+                proc_vram[int(parts[0])] = int(parts[1])  # MiB
+    return proc_mem, proc_vram
+
+
 def _attach_dyn_children(results, host_row):
     """对 ollama 应用，把当前加载的模型作为动态只读子项附加（parent_id=ollama.id）。
 
-    模型是运行时的，不写库；每次列表实时跑 `ollama ps` 拿当前加载的模型。
+    模型是运行时的，不写库；每次列表实时跑 `ollama ps` 拿当前加载的模型，
+    并按 PID 匹配 llama-server 进程得到真实内存(RSS)与显存(nvidia-smi)。
     """
     out = list(results)
     ollama = next((a for a in out if "ollama" in (a.get("name") or "").lower()), None)
@@ -119,14 +146,29 @@ def _attach_dyn_children(results, host_row):
         ok, txt = system_remote.run(host_row, "ollama ps", timeout=6)
     if not ok or not txt:
         return out
-    for m in _parse_ollama_ps(txt):
+    models = _parse_ollama_ps(txt)
+    proc_mem, proc_vram = _ollama_proc_runtime(host_row)
+    gpu_procs = [p for p, v in proc_vram.items() if v > 0 and p in proc_mem]
+    cpu_procs = [p for p in proc_mem if p not in proc_vram]
+    gpi = cpi = 0
+    for m in models:
         name = m["name"]
         proc = m["processor"]
         # 显存列以实际 GPU 占用为准：SIZE 是模型大小不是显存。
-        # 仅当 PROCESSOR 为 100% GPU 才近似显示 SIZE；CPU/混合(如 qwen-embed 走内存)显示 0(面板显示 —)。
+        # 100% GPU 的模型匹配 GPU 上的 llama-server(真实显存)，CPU/混合模型(走内存)匹配非 GPU 进程，显存为 0。
         mg = re.search(r"(\d+)%\s*GPU", proc)
         gpu_pct = int(mg.group(1)) if mg else 0
-        gpu_mb = _size_to_mb(m["size"]) if gpu_pct >= 100 else 0
+        if gpu_pct >= 100 and gpi < len(gpu_procs):
+            pid = gpu_procs[gpi]; gpi += 1
+            gpu_mb = proc_vram.get(pid, 0)
+            mem_mb = proc_mem.get(pid, 0)
+        elif gpu_pct < 100 and cpi < len(cpu_procs):
+            pid = cpu_procs[cpi]; cpi += 1
+            gpu_mb = 0
+            mem_mb = proc_mem.get(pid, 0)
+        else:
+            gpu_mb = _size_to_mb(m["size"]) if gpu_pct >= 100 else 0
+            mem_mb = 0
         out.append({
             "id": "dyn-ollama-" + str(name),
             "name": str(name),
@@ -143,7 +185,7 @@ def _attach_dyn_children(results, host_row):
             "host_id": ollama.get("host_id"),
             "status": "running",
             "listening": False,
-            "mem_mb": 0,
+            "mem_mb": mem_mb,
             "gpu_mib": gpu_mb,
             "health": "ok",
             "enabled": "n/a",
