@@ -813,6 +813,12 @@ function legacyCopy(t){
   document.body.removeChild(ta);
 }
 
+// 已登记应用的容器内存合计（MB）；分组等虚拟节点不计
+function appsMemTotal(){
+  var s=0;
+  (S.apps||[]).forEach(function(a){ if(a.type!=='group'){ s+=(a.mem_mb||0); } });
+  return s;
+}
 function renderOverview(){
   var gpu=S.gpu||{}, mem=S.mem||{}, cpu=S.cpu||{}, disk=S.disk||{};
   var memPct=mem.total?Math.round(mem.used/mem.total*100):0;
@@ -825,7 +831,7 @@ function renderOverview(){
   function dot(){ return '<span class="sdot"></span>'; }
   return '<div class="ovgrid">'
     +'<div class="stat s-gpu"><div class="label">'+dot()+'GPU · '+esc(gpu.name||'无')+'</div><div class="value">'+fmtMB(gpu.used)+' <small style="font-size:13px;color:var(--muted)">/ '+fmtMB(gpu.total)+'</small></div>'+bar(gpuPct, gpuPct>85)+'<div style="font-size:12px;color:var(--muted);margin-top:4px;">显存 '+gpuPct+'% · 利用率 '+(gpu.util||0)+'%</div></div>'
-    +'<div class="stat s-mem"><div class="label">'+dot()+'内存</div><div class="value">'+fmtMB(mem.used)+' <small style="font-size:13px;color:var(--muted)">/ '+fmtMB(mem.total)+'</small></div>'+bar(memPct, memPct>85)+'<div style="font-size:12px;color:var(--muted);margin-top:4px;">已用 '+memPct+'%</div></div>'
+    +'<div class="stat s-mem"><div class="label">'+dot()+'内存</div><div class="value">'+fmtMB(mem.used)+' <small style="font-size:13px;color:var(--muted)">/ '+fmtMB(mem.total)+'</small></div>'+bar(memPct, memPct>85)+'<div style="font-size:12px;color:var(--muted);margin-top:4px;">已用 '+memPct+'% · 可用 '+fmtMB(mem.available||0)+' · 已登记容器 '+fmtMB(appsMemTotal())+'</div></div>'
     +'<div class="stat s-cpu"><div class="label">'+dot()+'CPU 占用</div><div class="value">'+cpuUtil+'<small style="font-size:13px;color:var(--muted)">%</small></div>'+bar(cpuUtil, cpuUtil>85)+'</div>'
     +'<div class="stat s-disk"><div class="label">'+dot()+'硬盘</div><div class="value">'+disk.used+'<small style="font-size:13px;color:var(--muted)"> / '+disk.total+' GB</small></div>'+bar(diskPct, diskPct>85)+'<div style="font-size:12px;color:var(--muted);margin-top:4px;">已用 '+diskPct+'% · 剩余 '+disk.free+' GB</div></div>'
     +'<div class="stat s-svc"><div class="label">'+dot()+'服务</div><div class="value">'+running+'<small style="font-size:13px;color:var(--muted)"> / '+S.apps.length+'</small></div>'+'<div style="font-size:12px;color:var(--muted);margin-top:6px;">运行中 '+running+' · 已停止 '+stopped+'</div></div>'
